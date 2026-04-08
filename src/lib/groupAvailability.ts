@@ -1,6 +1,7 @@
 import { addDays, startOfDay, isToday, isTomorrow, differenceInCalendarDays, format } from "date-fns";
 import { expandRecurringBlocks, getAvailableSlots } from "@/lib/googleCalendar";
 import type { BusyInterval, RecurringBlock } from "@/types/calendar";
+import type { DbAvailabilityBlock } from "@/types/database";
 
 // ─── WeekSchedule types (mirror of AvailabilityPage local types) ──────────────
 // These match exactly what is written to localStorage("cya-availability").
@@ -125,6 +126,41 @@ export function getNearestSlot(
 ): { start: string; end: string } | null {
   const slots = findGroupAvailability(members, durationMinutes);
   return slots.length > 0 ? slots[0] : null;
+}
+
+// ─── Supabase → BusyInterval bridge ──────────────────────────────────────────
+
+/**
+ * Converts a user's DbAvailabilityBlock[] rows (fetched from Supabase) into a
+ * unified BusyInterval[] ready for the matching algorithm.
+ *
+ * Three block types are handled:
+ *   source="google",   is_recurring=false  → concrete timestamp interval
+ *   source="manual",   is_recurring=true   → RecurringBlock stored in recurrence_rule,
+ *                                            expanded via expandRecurringBlocks()
+ *   source="schedule", is_recurring=true   → WeekSchedule stored in recurrence_rule,
+ *                                            expanded via expandWeekSchedule()
+ */
+export function blocksToUserBusy(blocks: DbAvailabilityBlock[]): BusyInterval[] {
+  const result: BusyInterval[] = [];
+
+  for (const block of blocks) {
+    if (!block.is_recurring) {
+      // Concrete Google Calendar interval
+      if (block.start_time && block.end_time) {
+        result.push({ start: block.start_time, end: block.end_time, source: "google" });
+      }
+    } else if (block.source === "manual" && block.recurrence_rule) {
+      // Manual recurring block — recurrence_rule holds Omit<RecurringBlock, "id">
+      const rb = block.recurrence_rule as unknown as Omit<RecurringBlock, "id">;
+      result.push(...expandRecurringBlocks([{ ...rb, id: block.id }]));
+    } else if (block.source === "schedule" && block.recurrence_rule) {
+      // Weekly schedule — recurrence_rule holds a WeekSchedule object
+      result.push(...expandWeekSchedule(block.recurrence_rule as WeekSchedule));
+    }
+  }
+
+  return result;
 }
 
 // ─── Display formatting ───────────────────────────────────────────────────────

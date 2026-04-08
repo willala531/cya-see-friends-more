@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2, RefreshCw, Calendar } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import { cyaTransition } from "@/lib/motion";
 import { useGoogleCalendar } from "@/contexts/GoogleCalendarContext";
+import { useAvailabilityBlocks, useUpsertWeekSchedule } from "@/hooks/useAvailability";
 
 // ─── Existing weekly schedule types (unchanged) ───────────────────────────────
 
@@ -64,12 +66,23 @@ const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const AvailabilityPage = () => {
   const navigate = useNavigate();
 
-  // Existing weekly schedule
-  const [schedule, setSchedule] = useState<WeekSchedule>(() => {
-    const stored = localStorage.getItem("cya-availability");
-    return stored ? JSON.parse(stored) : defaultSchedule;
-  });
+  // Existing weekly schedule — loaded from Supabase on mount
+  const [schedule, setSchedule] = useState<WeekSchedule>(defaultSchedule);
   const [saved, setSaved] = useState(false);
+  const initializedRef = useRef(false);
+
+  const { data: userBlocks = [], isLoading: blocksLoading } = useAvailabilityBlocks();
+  const upsertWeekSchedule = useUpsertWeekSchedule();
+
+  // Hydrate schedule from DB once blocks have loaded (first load only)
+  useEffect(() => {
+    if (blocksLoading || initializedRef.current) return;
+    initializedRef.current = true;
+    const scheduleBlock = userBlocks.find((b) => b.source === "schedule");
+    if (scheduleBlock?.recurrence_rule) {
+      setSchedule(scheduleBlock.recurrence_rule as unknown as WeekSchedule);
+    }
+  }, [blocksLoading, userBlocks]);
 
   // New recurring blocks (from Google Calendar context)
   const {
@@ -141,9 +154,13 @@ const AvailabilityPage = () => {
   };
 
   const handleSave = () => {
-    localStorage.setItem("cya-availability", JSON.stringify(schedule));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    upsertWeekSchedule.mutate(schedule as unknown as Record<string, unknown>, {
+      onSuccess: () => {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      },
+      onError: () => toast.error("Failed to save availability"),
+    });
   };
 
   // ── Recurring block handler ─────────────────────────────────────────────────
@@ -302,9 +319,10 @@ const AvailabilityPage = () => {
       <motion.button
         whileTap={{ scale: 0.97 }}
         onClick={handleSave}
-        className="w-full mt-5 py-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-gloss"
+        disabled={upsertWeekSchedule.isPending}
+        className="w-full mt-5 py-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-gloss disabled:opacity-60"
       >
-        {saved ? "✓ saved" : "save availability"}
+        {saved ? "✓ saved" : upsertWeekSchedule.isPending ? "saving…" : "save availability"}
       </motion.button>
 
       {/* ── Recurring unavailable blocks ───────────────────────────────────── */}

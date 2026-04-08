@@ -3,15 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { Clock, LogOut } from "lucide-react";
 import { cyaTransition } from "@/lib/motion";
 import GoogleCalendarConnect from "@/components/GoogleCalendarConnect";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ProfilePage = () => {
   const navigate = useNavigate();
-  const user = JSON.parse(
-    localStorage.getItem("cya-user") || '{"name":"User","email":"user@email.com"}'
-  );
+  const { profile, signOut } = useAuth();
 
-  const handleLogout = () => {
-    localStorage.removeItem("cya-user");
+  const displayName = profile?.display_name ?? "User";
+  const email = profile?.email ?? "";
+
+  const handleLogout = async () => {
+    await signOut();
     navigate("/");
   };
 
@@ -29,11 +31,11 @@ const ProfilePage = () => {
       >
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center text-lg font-medium text-secondary-foreground">
-            {user.name?.[0] || "U"}
+            {displayName[0] ?? "U"}
           </div>
           <div>
-            <p className="text-base font-medium text-foreground">{user.name}</p>
-            <p className="font-mono-data text-muted-foreground text-[11px]">{user.email}</p>
+            <p className="text-base font-medium text-foreground">{displayName}</p>
+            <p className="font-mono-data text-muted-foreground text-[11px]">{email}</p>
           </div>
         </div>
       </motion.div>

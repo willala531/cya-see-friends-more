@@ -1,20 +1,19 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { cyaTransition } from "@/lib/motion";
+import { useAuth } from "@/contexts/AuthContext";
 
 const AuthPage = () => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const { signInWithGoogle, isLoading, session } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    localStorage.setItem("cya-user", JSON.stringify({ name: name || "User", email }));
-    navigate("/dashboard");
-  };
+  // Redirect already-authenticated users straight to their dashboard
+  useEffect(() => {
+    if (!isLoading && session) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [session, isLoading, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
@@ -30,76 +29,22 @@ const AuthPage = () => {
         </div>
 
         <div className="glass-surface rounded-lg p-6">
-          <div className="flex gap-1 mb-6 p-1 bg-secondary rounded-md">
-            <button
-              onClick={() => setIsLogin(true)}
-              className={`flex-1 py-2 text-sm font-medium rounded-sm transition-all duration-150 ${
-                isLogin ? "bg-background shadow-gloss text-foreground" : "text-muted-foreground"
-              }`}
-            >
-              sign in
-            </button>
-            <button
-              onClick={() => setIsLogin(false)}
-              className={`flex-1 py-2 text-sm font-medium rounded-sm transition-all duration-150 ${
-                !isLogin ? "bg-background shadow-gloss text-foreground" : "text-muted-foreground"
-              }`}
-            >
-              sign up
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                transition={cyaTransition}
-              >
-                <label className="block text-xs font-mono-data text-muted-foreground mb-1.5">Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-md border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 transition-shadow"
-                  placeholder="your name"
-                  required={!isLogin}
-                />
-              </motion.div>
-            )}
-            <div>
-              <label className="block text-xs font-mono-data text-muted-foreground mb-1.5">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-md border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 transition-shadow"
-                placeholder="you@email.com"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-mono-data text-muted-foreground mb-1.5">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-md border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 transition-shadow"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-            <motion.button
-              type="submit"
-              whileTap={{ scale: 0.96 }}
-              className="w-full py-2.5 bg-primary text-primary-foreground font-medium text-sm rounded-md shadow-gloss hover:shadow-gloss-hover transition-shadow duration-150"
-            >
-              {isLogin ? "sign in" : "create account"}
-            </motion.button>
-          </form>
+          <p className="text-sm text-muted-foreground text-center mb-5">
+            Sign in to coordinate hangouts with your friends.
+          </p>
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={signInWithGoogle}
+            disabled={isLoading}
+            className="w-full py-2.5 bg-primary text-primary-foreground font-medium text-sm rounded-md shadow-gloss hover:shadow-gloss-hover transition-shadow duration-150 disabled:opacity-50"
+          >
+            Continue with Google
+          </motion.button>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-6 font-mono-data">v0.1 • coordination engine</p>
+        <p className="text-center text-xs text-muted-foreground mt-6 font-mono-data">
+          v0.1 • coordination engine
+        </p>
       </motion.div>
     </div>
   );

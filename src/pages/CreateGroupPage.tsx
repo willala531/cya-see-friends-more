@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Users, Search, Check, Send } from "lucide-react";
 import { toast } from "sonner";
 import { cyaTransition } from "@/lib/motion";
+import { useCreateGroup } from "@/hooks/useGroups";
 
 interface Contact {
   id: string;
@@ -24,6 +25,7 @@ const MOCK_CONTACTS: Contact[] = [
 
 const CreateGroupPage = () => {
   const navigate = useNavigate();
+  const createGroup = useCreateGroup();
   const [step, setStep] = useState<"name" | "contacts">("name");
   const [groupName, setGroupName] = useState("");
   const [contactsSynced, setContactsSynced] = useState(false);
@@ -50,13 +52,24 @@ const CreateGroupPage = () => {
     });
   };
 
+  const handleCreateGroup = (onSuccess?: () => void) => {
+    createGroup.mutate(groupName, {
+      onSuccess: (group) => {
+        onSuccess?.();
+        navigate(`/group/${group.id}`);
+      },
+      onError: () => toast.error("Failed to create group"),
+    });
+  };
+
   const handleSendInvites = () => {
     if (selected.size === 0) {
       toast.error("Select at least one contact");
       return;
     }
-    toast.success(`Invites sent to ${selected.size} friend${selected.size > 1 ? "s" : ""}!`);
-    navigate("/dashboard");
+    handleCreateGroup(() =>
+      toast.success(`Group created! Invites sent to ${selected.size} friend${selected.size > 1 ? "s" : ""}!`),
+    );
   };
 
   return (
@@ -230,13 +243,15 @@ const CreateGroupPage = () => {
                 <motion.button
                   whileTap={{ scale: 0.96 }}
                   onClick={handleSendInvites}
-                  className="w-full py-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-gloss flex items-center justify-center gap-2"
+                  disabled={createGroup.isPending}
+                  className="w-full py-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-gloss flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  <Send size={16} /> Send SMS Invites
+                  <Send size={16} /> {createGroup.isPending ? "Creating…" : "Send SMS Invites"}
                 </motion.button>
                 <button
-                  onClick={() => navigate("/dashboard")}
-                  className="w-full mt-3 text-muted-foreground text-xs font-mono-data hover:text-foreground transition-colors text-center"
+                  onClick={() => handleCreateGroup()}
+                  disabled={createGroup.isPending}
+                  className="w-full mt-3 text-muted-foreground text-xs font-mono-data hover:text-foreground transition-colors text-center disabled:opacity-60"
                 >
                   skip — I'll invite people later
                 </button>

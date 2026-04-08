@@ -3,18 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { cyaTransition } from "@/lib/motion";
 import GoogleCalendarConnect from "@/components/GoogleCalendarConnect";
+import { useAuth } from "@/contexts/AuthContext";
 
 const WelcomePage = () => {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("cya-user") || '{"name":"User"}');
+  const { profile } = useAuth();
+  const firstName = profile?.display_name?.split(" ")[0] ?? "friend";
 
   const handleSkip = () => {
-    localStorage.setItem("cya-onboarded", "true");
     navigate("/dashboard");
   };
 
   const handleConnected = () => {
-    localStorage.setItem("cya-onboarded", "true");
     // Small delay so the success toast is visible before navigating
     setTimeout(() => navigate("/dashboard"), 1200);
   };
@@ -27,7 +27,7 @@ const WelcomePage = () => {
         transition={cyaTransition}
       >
         <h1 className="text-heading text-2xl mb-1">
-          welcome, {user.name?.split(" ")[0] || "friend"}
+          welcome, {firstName}
         </h1>
         <p className="text-body text-sm">
           let's get you set up so your friends can find time with you.
