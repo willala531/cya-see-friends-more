@@ -1,12 +1,12 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Link2, Check, X, Clock, AlertTriangle, CalendarCheck } from "lucide-react";
 import { toast } from "sonner";
 import { cyaTransition } from "@/lib/motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { useGroup } from "@/hooks/useGroups";
-import { useGroupEvents, useUpdateRsvp } from "@/hooks/useEvents";
+import { useGroup, useUpdateLastSuggested } from "@/hooks/useGroups";
+import { useGroupEvents, useUpdateRsvp, useCreateHangoutSuggestion } from "@/hooks/useEvents";
 import { useGroupAvailabilityBlocks } from "@/hooks/useAvailability";
 import {
   blocksToUserBusy,
@@ -14,12 +14,9 @@ import {
   formatNearestSlot,
   DEFAULT_HANGOUT_DURATION,
 } from "@/lib/groupAvailability";
-
-const ACTIVITY_OPTIONS = [
-  "Dinner", "Drinks", "Hiking", "Board Games", "Movies",
-  "Coffee", "Sports", "Concerts", "Road Trips", "Cooking",
-  "Karaoke", "Beach", "Brunch", "Gym", "Study",
-];
+import { suggestActivity } from "@/utils/suggestionEngine";
+import { CATEGORY_EMOJI } from "@/data/activities";
+import GroupInterests from "@/components/GroupInterests";
 
 const GroupPage = () => {
   const { groupId } = useParams();
@@ -27,15 +24,14 @@ const GroupPage = () => {
   const { user } = useAuth();
 
   const { data: group, isLoading: groupLoading } = useGroup(groupId);
-  const { data: events = [] } = useGroupEvents(groupId);
+  const { data: events = [], isLoading: eventsLoading } = useGroupEvents(groupId);
   const { data: allBlocks = [] } = useGroupAvailabilityBlocks(groupId);
   const updateRsvp = useUpdateRsvp();
+  const createSuggestion = useCreateHangoutSuggestion();
+  const updateLastSuggested = useUpdateLastSuggested();
 
   // Optimistic RSVP state for instant UI feedback before the mutation settles
   const [rsvpStates, setRsvpStates] = useState<Record<string, "yes" | "no" | "pending">>({});
-  const [activities, setActivities] = useState<string[]>(
-    () => JSON.parse(localStorage.getItem(`cya-activities-${groupId}`) || "[]"),
-  );
 
   // Members who have at least one availability block are considered "synced"
   const syncedUserIds = useMemo(
@@ -43,7 +39,7 @@ const GroupPage = () => {
     [allBlocks],
   );
 
-  // Compute nearest shared window entirely from Supabase availability data
+  // Compute nearest shared window from Supabase availability data
   const nearestSlot = useMemo(() => {
     if (!group || allBlocks.length === 0) return null;
 
@@ -56,6 +52,64 @@ const GroupPage = () => {
 
     return getNearestSlot(membersBusy, DEFAULT_HANGOUT_DURATION);
   }, [group, allBlocks]);
+
+  // Run the suggestion engine whenever the slot or group interests change
+  const suggestion = useMemo(() => {
+    if (!nearestSlot || !group?.group_interests?.length) return null;
+    return suggestActivity(
+      group.group_interests,
+      nearestSlot,
+      new Date().getMonth() + 1,
+      group.last_suggested_activity_id,
+    );
+  }, [nearestSlot, group?.group_interests, group?.last_suggested_activity_id]);
+
+  // Track which slot+activity combo was last saved to avoid duplicate inserts
+  const savedKeyRef = useRef<string | null>(null);
+
+  // Auto-save the suggestion to hangout_suggestions when it's genuinely new
+  useEffect(() => {
+    if (!suggestion || !nearestSlot || !group || eventsLoading) return;
+
+    const key = `${nearestSlot.start}::${suggestion.id}`;
+    if (savedKeyRef.current === key) return;
+
+    // Skip if a matching pending event already exists (within 1 hour of the slot)
+    const alreadySaved = events.some(
+      (e) =>
+        e.suggested_activity === suggestion.name &&
+        e.start_time &&
+        Math.abs(
+          new Date(e.start_time).getTime() - new Date(nearestSlot.start).getTime(),
+        ) < 60 * 60 * 1000,
+    );
+
+    if (alreadySaved) {
+      savedKeyRef.current = key;
+      return;
+    }
+
+    // Mark before the async call to prevent double-firing in Strict Mode
+    savedKeyRef.current = key;
+
+    createSuggestion.mutate(
+      {
+        group_id: group.id,
+        suggested_activity: suggestion.name,
+        start_time: nearestSlot.start,
+        end_time: nearestSlot.end,
+      },
+      {
+        onSuccess: () => {
+          updateLastSuggested.mutate({
+            groupId: group.id,
+            activityId: suggestion.id,
+          });
+        },
+      },
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestion?.id, nearestSlot?.start, eventsLoading, events.length]);
 
   if (groupLoading || !group) {
     return (
@@ -77,7 +131,6 @@ const GroupPage = () => {
       {
         onSuccess: () => toast.success(response === "yes" ? "You're in!" : "Maybe next time"),
         onError: () => {
-          // Roll back optimistic update on failure
           setRsvpStates((prev) => {
             const next = { ...prev };
             delete next[hangoutId];
@@ -89,18 +142,9 @@ const GroupPage = () => {
     );
   };
 
-  const toggleActivity = (activity: string) => {
-    setActivities((prev) => {
-      const next = prev.includes(activity)
-        ? prev.filter((a) => a !== activity)
-        : [...prev, activity];
-      localStorage.setItem(`cya-activities-${groupId}`, JSON.stringify(next));
-      return next;
-    });
-  };
-
   return (
     <div className="pb-24 px-4 pt-6 max-w-lg mx-auto">
+      {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => navigate("/dashboard")}
@@ -124,41 +168,11 @@ const GroupPage = () => {
         </motion.button>
       </div>
 
-      {/* Activities */}
+      {/* Next shared window + suggestion */}
       <motion.section
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={cyaTransition}
-        className="mb-6"
-      >
-        <h2 className="font-mono-data text-muted-foreground mb-2">Activities</h2>
-        <div className="flex flex-wrap gap-2">
-          {ACTIVITY_OPTIONS.map((activity) => {
-            const active = activities.includes(activity);
-            return (
-              <motion.button
-                key={activity}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => toggleActivity(activity)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-150 ${
-                  active
-                    ? "bg-primary text-primary-foreground shadow-gloss"
-                    : "bg-secondary text-secondary-foreground hover:shadow-gloss-hover"
-                }`}
-              >
-                {active && <Check size={10} className="inline mr-1" />}
-                {activity}
-              </motion.button>
-            );
-          })}
-        </div>
-      </motion.section>
-
-      {/* Next shared window */}
-      <motion.section
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ ...cyaTransition, delay: 0.08 }}
         className="mb-6"
       >
         <h2 className="font-mono-data text-muted-foreground mb-2">Next window</h2>
@@ -166,10 +180,19 @@ const GroupPage = () => {
           <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
             <CalendarCheck size={15} className="text-primary" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-sm text-foreground leading-snug">
               {formatNearestSlot(nearestSlot)}
             </p>
+            {nearestSlot && (
+              <p className="text-sm text-foreground mt-1">
+                {suggestion
+                  ? `How about ${suggestion.name.toLowerCase()}? ${CATEGORY_EMOJI[suggestion.category]}`
+                  : group.group_interests.length === 0
+                    ? "Add group interests below to get a suggestion."
+                    : "No matching activities for this window."}
+              </p>
+            )}
             <p className="font-mono-data text-[10px] text-muted-foreground mt-1.5 uppercase">
               {syncedUserIds.size}/{group.group_members.length} members synced ·{" "}
               {DEFAULT_HANGOUT_DURATION / 60}h window
@@ -210,9 +233,9 @@ const GroupPage = () => {
               }`}
             >
               <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-base font-medium text-foreground">{event.suggested_activity}</p>
-                </div>
+                <p className="text-base font-medium text-foreground">
+                  {event.suggested_activity}
+                </p>
                 {event.status === "confirmed" && (
                   <span className="font-mono-data text-[10px] text-accent px-2 py-0.5 rounded-sm bg-accent/10">
                     confirmed
@@ -235,7 +258,10 @@ const GroupPage = () => {
                     {endDate && (
                       <>
                         {" "}–{" "}
-                        {endDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        {endDate.toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
                       </>
                     )}
                   </p>
@@ -312,6 +338,20 @@ const GroupPage = () => {
         );
       })}
 
+      {/* Group interests */}
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ ...cyaTransition, delay: 0.12 }}
+        className="mb-6"
+      >
+        <h2 className="font-mono-data text-muted-foreground mb-2">Activities</h2>
+        <p className="text-body text-xs mb-3">
+          Select what your group enjoys. We'll suggest the best fit for your next window.
+        </p>
+        <GroupInterests groupId={group.id} interests={group.group_interests} />
+      </motion.section>
+
       {/* Members */}
       <section>
         <h2 className="font-mono-data text-muted-foreground mb-3">Members</h2>
@@ -334,7 +374,9 @@ const GroupPage = () => {
                     <p className="text-sm font-medium text-foreground">
                       {member.users?.display_name ?? "Unknown"}
                     </p>
-                    <p className="font-mono-data text-[10px] text-muted-foreground">{member.role}</p>
+                    <p className="font-mono-data text-[10px] text-muted-foreground">
+                      {member.role}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">

@@ -87,3 +87,32 @@ export function useUpdateRsvp() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
   });
 }
+
+/**
+ * Inserts a new hangout suggestion (status: pending) for a group.
+ * Called automatically by GroupPage when a new activity is suggested.
+ */
+export function useCreateHangoutSuggestion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (suggestion: {
+      group_id: string;
+      suggested_activity: string;
+      start_time: string;
+      end_time: string;
+    }) => {
+      const { data, error } = await supabase
+        .from("hangout_suggestions")
+        .insert({ ...suggestion, status: "pending" })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, { group_id }) => {
+      queryClient.invalidateQueries({ queryKey: ["events", "group", group_id] });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+    },
+  });
+}

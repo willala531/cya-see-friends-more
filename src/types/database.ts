@@ -17,6 +17,8 @@ export interface DbGroup {
   created_by: string | null;          // references users.id
   invite_code: string;
   created_at: string;
+  group_interests: string[];          // activity IDs selected by the group
+  last_suggested_activity_id: string | null; // for repeat-filter persistence
 }
 
 export interface DbGroupMember {

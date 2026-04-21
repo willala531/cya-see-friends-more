@@ -22,6 +22,8 @@ export function useGroups() {
             invite_code,
             created_by,
             created_at,
+            group_interests,
+            last_suggested_activity_id,
             group_members (
               id,
               user_id,
@@ -55,6 +57,8 @@ export function useGroup(groupId: string | undefined) {
           invite_code,
           created_by,
           created_at,
+          group_interests,
+          last_suggested_activity_id,
           group_members (
             id,
             user_id,
@@ -101,5 +105,60 @@ export function useCreateGroup() {
       return group;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["groups"] }),
+  });
+}
+
+/**
+ * Saves the group's selected activity IDs to Supabase.
+ * Any group member can call this — the RLS policy must allow member updates.
+ */
+export function useUpdateGroupInterests() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      interestIds,
+    }: {
+      groupId: string;
+      interestIds: string[];
+    }) => {
+      const { error } = await supabase
+        .from("groups")
+        .update({ group_interests: interestIds })
+        .eq("id", groupId);
+      if (error) throw error;
+    },
+    onSuccess: (_data, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: ["group", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+    },
+  });
+}
+
+/**
+ * Persists the most recently suggested activity ID on the group row so the
+ * repeat filter works across page reloads and sessions.
+ */
+export function useUpdateLastSuggested() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      activityId,
+    }: {
+      groupId: string;
+      activityId: string;
+    }) => {
+      const { error } = await supabase
+        .from("groups")
+        .update({ last_suggested_activity_id: activityId })
+        .eq("id", groupId);
+      if (error) throw error;
+    },
+    onSuccess: (_data, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: ["group", groupId] });
+    },
   });
 }
