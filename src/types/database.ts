@@ -55,6 +55,16 @@ export interface DbHangoutSuggestion {
   suggested_activity: string | null;
   status: "pending" | "confirmed" | "cancelled";
   created_at: string;
+  // New columns for RSVP flow:
+  reminder_sent: boolean;
+  rsvp_expires_at: string | null;     // day before the event
+  vote_expires_at: string | null;     // 24h after first "maybe"
+  vote_options: {                     // set when vote flow is active
+    originalId: string | null;
+    alt1Id: string | null;
+    alt2Id: string | null;
+  } | null;
+  winning_activity_id: string | null; // set after vote resolves
   // Populated by joins:
   groups?: { id: string; name: string };
   rsvps?: DbRsvp[];
@@ -64,10 +74,37 @@ export interface DbRsvp {
   id: string;
   hangout_id: string;
   user_id: string;
-  response: "yes" | "no" | "pending";
+  response: "yes" | "no" | "maybe" | "pending";
   created_at: string;
   // Populated by join:
   users?: Pick<DbUser, "id" | "display_name">;
+}
+
+export interface DbHangoutVote {
+  id: string;
+  hangout_id: string;
+  user_id: string;
+  activity_id: string;
+  created_at: string;
+}
+
+export interface DbNotification {
+  id: string;
+  user_id: string;
+  group_id: string | null;
+  message: string;
+  read: boolean;
+  created_at: string;
+}
+
+export interface DbPushSubscription {
+  id: string;
+  user_id: string;
+  subscription: {
+    endpoint: string;
+    keys: { p256dh: string; auth: string };
+  };
+  created_at: string;
 }
 
 // Convenience type: group row with its members array pre-joined

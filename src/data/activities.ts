@@ -716,3 +716,6 @@ export const activitiesByCategory = activities.reduce<Record<string, Activity[]>
 
 /** Fast id → Activity lookup. */
 export const activityById = Object.fromEntries(activities.map((a) => [a.id, a]));
+
+/** Fast name → Activity lookup (case-sensitive match on activity.name). */
+export const activityByName = Object.fromEntries(activities.map((a) => [a.name, a]));

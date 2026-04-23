@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import type { DbHangoutSuggestion } from "@/types/database";
+import type { DbHangoutSuggestion, DbHangoutVote } from "@/types/database";
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
 
@@ -60,6 +60,24 @@ export function useGroupEvents(groupId: string | undefined) {
   });
 }
 
+/** Votes for a single hangout (used during the vote flow). */
+export function useHangoutVotes(hangoutId: string | undefined) {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ["votes", hangoutId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("hangout_votes")
+        .select("*")
+        .eq("hangout_id", hangoutId!);
+      if (error) throw error;
+      return (data ?? []) as DbHangoutVote[];
+    },
+    enabled: !!user && !!hangoutId,
+  });
+}
+
 // ─── Write ────────────────────────────────────────────────────────────────────
 
 /**
@@ -76,7 +94,7 @@ export function useUpdateRsvp() {
       response,
     }: {
       hangoutId: string;
-      response: "yes" | "no" | "pending";
+      response: "yes" | "no" | "maybe" | "pending";
     }) => {
       const { error } = await supabase.from("rsvps").upsert(
         { hangout_id: hangoutId, user_id: user!.id, response },
@@ -90,7 +108,7 @@ export function useUpdateRsvp() {
 
 /**
  * Inserts a new hangout suggestion (status: pending) for a group.
- * Called automatically by GroupPage when a new activity is suggested.
+ * rsvp_expires_at is automatically set to 24h before the event start time.
  */
 export function useCreateHangoutSuggestion() {
   const queryClient = useQueryClient();
@@ -102,17 +120,73 @@ export function useCreateHangoutSuggestion() {
       start_time: string;
       end_time: string;
     }) => {
+      // Expire RSVPs 24 hours before the event
+      const expiresAt = new Date(
+        new Date(suggestion.start_time).getTime() - 24 * 60 * 60 * 1000,
+      ).toISOString();
+
       const { data, error } = await supabase
         .from("hangout_suggestions")
-        .insert({ ...suggestion, status: "pending" })
+        .insert({
+          ...suggestion,
+          status: "pending",
+          rsvp_expires_at: expiresAt,
+        })
         .select()
         .single();
       if (error) throw error;
-      return data;
+      return data as DbHangoutSuggestion;
     },
     onSuccess: (_data, { group_id }) => {
       queryClient.invalidateQueries({ queryKey: ["events", "group", group_id] });
       queryClient.invalidateQueries({ queryKey: ["events"] });
+    },
+  });
+}
+
+/** Update the status of a hangout suggestion. */
+export function useUpdateHangoutStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      hangoutId,
+      status,
+    }: {
+      hangoutId: string;
+      status: "pending" | "confirmed" | "cancelled";
+    }) => {
+      const { error } = await supabase
+        .from("hangout_suggestions")
+        .update({ status })
+        .eq("id", hangoutId);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
+  });
+}
+
+/** Cast or change the current user's vote on an activity for a hangout. */
+export function useCastVote() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      hangoutId,
+      activityId,
+    }: {
+      hangoutId: string;
+      activityId: string;
+    }) => {
+      const { error } = await supabase.from("hangout_votes").upsert(
+        { hangout_id: hangoutId, user_id: user!.id, activity_id: activityId },
+        { onConflict: "hangout_id,user_id" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: (_data, { hangoutId }) => {
+      queryClient.invalidateQueries({ queryKey: ["votes", hangoutId] });
     },
   });
 }

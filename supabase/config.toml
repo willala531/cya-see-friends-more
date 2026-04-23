@@ -1,0 +1,11 @@
+# Supabase project configuration
+# https://supabase.com/docs/guides/functions
+
+[functions."process-hangout-decision"]
+verify_jwt = false
+
+[functions."create-calendar-event"]
+verify_jwt = false
+
+[functions."check-expiry"]
+verify_jwt = false

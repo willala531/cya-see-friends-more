@@ -107,3 +107,59 @@ export function suggestActivity(
 
   return best;
 }
+
+// ─── Multi-suggestion variant ─────────────────────────────────────────────────
+
+/**
+ * Returns up to `count` best-fit activities from the eligible pool, excluding
+ * any IDs in `excludeIds`. Used to generate vote alternatives when someone
+ * responds "I'm free but don't like the activity."
+ *
+ * Applies the same 5 filters as suggestActivity, sorted by fill score descending.
+ */
+export function suggestAlternatives(
+  groupInterestIds: string[],
+  slot: { start: string; end: string },
+  currentMonth: number,
+  excludeIds: (string | null | undefined)[],
+  count: number,
+): Activity[] {
+  const slotStart = new Date(slot.start);
+  const slotEnd = new Date(slot.end);
+  const slotDurationMinutes =
+    (slotEnd.getTime() - slotStart.getTime()) / 60_000;
+  const slotStartHour = slotStart.getHours() + slotStart.getMinutes() / 60;
+  const slotEndHour = Math.min(
+    slotEnd.getHours() + slotEnd.getMinutes() / 60,
+    24,
+  );
+  const isWinter = WINTER_MONTHS.has(currentMonth);
+  const excluded = new Set(excludeIds.filter(Boolean) as string[]);
+
+  let eligible = activities
+    .filter((a) => groupInterestIds.includes(a.id))
+    .filter((a) => !excluded.has(a.id))
+    .filter((a) => !(a.seasonalRestriction === "april-october" && isWinter))
+    .filter((a) => {
+      const required = a.minFreeTimeMinutes ?? a.minDuration + TOTAL_BUFFER;
+      return slotDurationMinutes >= required;
+    })
+    .filter((a) => {
+      const midDuration = (a.minDuration + a.maxDuration) / 2;
+      const overlapStart = Math.max(slotStartHour, a.timeWindow.start);
+      const overlapEnd = Math.min(slotEndHour, a.timeWindow.end);
+      const overlapMinutes = (overlapEnd - overlapStart) * 60;
+      return overlapMinutes >= midDuration + TOTAL_BUFFER;
+    });
+
+  eligible = eligible.sort((a, b) => {
+    const midA = (a.minDuration + a.maxDuration) / 2;
+    const midB = (b.minDuration + b.maxDuration) / 2;
+    return (
+      scoreFill((midB + TOTAL_BUFFER) / slotDurationMinutes) -
+      scoreFill((midA + TOTAL_BUFFER) / slotDurationMinutes)
+    );
+  });
+
+  return eligible.slice(0, count);
+}
