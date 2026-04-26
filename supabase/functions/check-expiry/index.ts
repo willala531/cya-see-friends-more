@@ -103,12 +103,21 @@ Deno.serve(async (req) => {
       .eq("id", row.id);
   }
 
+  // ── Job 4: expire stale group invites ──────────────────────────────────────
+  const { data: expiredInvites } = await supabase
+    .from("group_invites")
+    .update({ status: "expired" })
+    .eq("status", "pending")
+    .lt("expires_at", now)
+    .select("id");
+
   return new Response(
     JSON.stringify({
       ok: true,
       expiredVotes: (expiredVotes ?? []).length,
       expiredRsvps: (expiredRsvps ?? []).length,
       reminders: (expiringSoon ?? []).length,
+      expiredInvites: (expiredInvites ?? []).length,
     }),
     { headers: { "Content-Type": "application/json" } },
   );

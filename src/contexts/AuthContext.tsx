@@ -38,9 +38,11 @@ async function fetchOrCreateProfile(
 
   if (existing) return existing as DbUser;
 
+  // New users start with has_completed_onboarding: false so they see the
+  // phone-number onboarding screen after their first login.
   const { data: created } = await supabase
     .from("users")
-    .insert({ id: userId, email, display_name: displayName })
+    .insert({ id: userId, email, display_name: displayName, has_completed_onboarding: false })
     .select()
     .single();
 

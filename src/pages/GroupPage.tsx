@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Link2, Clock, AlertTriangle, CalendarCheck } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Link2, Clock, AlertTriangle, CalendarCheck, UserPlus, ToggleLeft, ToggleRight } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cyaTransition } from "@/lib/motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { useGroup, useUpdateLastSuggested } from "@/hooks/useGroups";
+import { useGroup, useUpdateLastSuggested, useUpdateCanInvite } from "@/hooks/useGroups";
 import {
   useGroupEvents,
   useUpdateRsvp,
@@ -28,6 +28,7 @@ import GroupInterests from "@/components/GroupInterests";
 import RsvpModal from "@/components/RsvpModal";
 import VoteModal from "@/components/VoteModal";
 import ConfettiOverlay from "@/components/ConfettiOverlay";
+import InviteModal from "@/components/InviteModal";
 
 // ─── Pending event the current user hasn't answered yet ───────────────────────
 
@@ -96,6 +97,7 @@ function EventDate({
 const GroupPage = () => {
   const { groupId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
 
   const { data: group, isLoading: groupLoading } = useGroup(groupId);
@@ -104,7 +106,11 @@ const GroupPage = () => {
   const updateRsvp = useUpdateRsvp();
   const createSuggestion = useCreateHangoutSuggestion();
   const updateLastSuggested = useUpdateLastSuggested();
+  const updateCanInvite = useUpdateCanInvite();
   const castVote = useCastVote();
+
+  // Invite modal
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   // Optimistic RSVP state
   const [rsvpStates, setRsvpStates] = useState<
@@ -130,11 +136,29 @@ const GroupPage = () => {
   // Session-dismissed RSVP modal keys
   const dismissedRef = useRef(new Set<string>());
 
+  // Welcome toast when arriving via invite acceptance
+  const welcomeShownRef = useRef(false);
+  useEffect(() => {
+    const welcomeGroup = searchParams.get("welcome");
+    if (welcomeGroup && !welcomeShownRef.current) {
+      welcomeShownRef.current = true;
+      toast.success(`Welcome to ${welcomeGroup}! 🎉`);
+    }
+  }, [searchParams]);
+
   // ── Synced members ────────────────────────────────────────────────────────
   const syncedUserIds = useMemo(
     () => new Set(allBlocks.map((b) => b.user_id)),
     [allBlocks],
   );
+
+  // ── Invite permissions ─────────────────────────────────────────────────────
+  const myMember = useMemo(
+    () => group?.group_members.find((m) => m.user_id === user?.id),
+    [group, user],
+  );
+  const isCreator = group?.created_by === user?.id;
+  const canInvite = myMember?.can_invite ?? false;
 
   // ── Nearest slot ─────────────────────────────────────────────────────────
   const nearestSlot = useMemo(() => {
@@ -291,6 +315,16 @@ const GroupPage = () => {
         <ConfettiOverlay onDone={() => setShowConfetti(false)} />
       )}
 
+      {/* Invite modal */}
+      <AnimatePresence>
+        {showInviteModal && (
+          <InviteModal
+            groupId={group.id}
+            onDismiss={() => setShowInviteModal(false)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* RSVP modal */}
       {showRsvpModal && firstUnanswered && (
         <RsvpModal
@@ -334,14 +368,26 @@ const GroupPage = () => {
               {group.group_members.length} members
             </p>
           </div>
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={handleCopyInvite}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary text-xs font-medium text-secondary-foreground hover:shadow-gloss-hover transition-shadow"
-          >
-            <Link2 size={12} />
-            invite
-          </motion.button>
+          <div className="flex items-center gap-2">
+            {canInvite && (
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={() => setShowInviteModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-xs font-medium text-primary-foreground shadow-gloss"
+              >
+                <UserPlus size={12} />
+                Invite
+              </motion.button>
+            )}
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={handleCopyInvite}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary text-xs font-medium text-secondary-foreground hover:shadow-gloss-hover transition-shadow"
+            >
+              <Link2 size={12} />
+              link
+            </motion.button>
+          </div>
         </div>
 
         {/* Next shared window + suggestion */}
@@ -540,10 +586,18 @@ const GroupPage = () => {
 
         {/* Members */}
         <section>
-          <h2 className="font-mono-data text-muted-foreground mb-3">Members</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-mono-data text-muted-foreground">Members</h2>
+            {isCreator && (
+              <span className="font-mono-data text-[10px] text-muted-foreground uppercase">
+                Can invite
+              </span>
+            )}
+          </div>
           <div className="space-y-2">
             {group.group_members.map((member, i) => {
               const synced = syncedUserIds.has(member.user_id);
+              const isSelf = member.user_id === user?.id;
               return (
                 <motion.div
                   key={member.user_id}
@@ -565,15 +619,39 @@ const GroupPage = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    {synced ? (
-                      <span className="w-2 h-2 rounded-full bg-accent cyan-glow" />
-                    ) : (
-                      <AlertTriangle size={12} className="text-muted-foreground" />
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                      {synced ? (
+                        <span className="w-2 h-2 rounded-full bg-accent cyan-glow" />
+                      ) : (
+                        <AlertTriangle size={12} className="text-muted-foreground" />
+                      )}
+                      <span className="font-mono-data text-[10px] text-muted-foreground">
+                        {synced ? "SYNCED" : "NO DATA"}
+                      </span>
+                    </div>
+
+                    {/* Can-invite toggle: visible to creator, hidden for self */}
+                    {isCreator && !isSelf && (
+                      <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() =>
+                          updateCanInvite.mutate({
+                            memberId: member.id,
+                            groupId: group.id,
+                            canInvite: !member.can_invite,
+                          })
+                        }
+                        className="text-muted-foreground hover:text-primary transition-colors"
+                        title={member.can_invite ? "Revoke invite permission" : "Allow to invite"}
+                      >
+                        {member.can_invite ? (
+                          <ToggleRight size={20} className="text-primary" />
+                        ) : (
+                          <ToggleLeft size={20} />
+                        )}
+                      </motion.button>
                     )}
-                    <span className="font-mono-data text-[10px] text-muted-foreground">
-                      {synced ? "SYNCED" : "NO DATA"}
-                    </span>
                   </div>
                 </motion.div>
               );

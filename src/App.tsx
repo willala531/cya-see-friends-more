@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { motion, AnimatePresence } from "framer-motion";
@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { GoogleCalendarProvider } from "@/contexts/GoogleCalendarContext";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { supabase } from "@/lib/supabase";
+import { INVITE_TOKEN_KEY } from "@/pages/InvitePage";
 import AuthPage from "./pages/AuthPage";
 import Dashboard from "./pages/Dashboard";
 import GroupPage from "./pages/GroupPage";
@@ -18,6 +19,8 @@ import ProfilePage from "./pages/ProfilePage";
 import AvailabilityPage from "./pages/AvailabilityPage";
 import WelcomePage from "./pages/WelcomePage";
 import NotificationsPage from "./pages/NotificationsPage";
+import InvitePage from "./pages/InvitePage";
+import OnboardingPage from "./pages/OnboardingPage";
 import BottomNav from "./components/BottomNav";
 import NotFound from "./pages/NotFound";
 
@@ -121,6 +124,58 @@ function PushPermissionBanner() {
   );
 }
 
+// ─── Post-auth handler ────────────────────────────────────────────────────────
+// Runs once after every login. Priority order:
+//   1. If sessionStorage holds an invite token (stored by InvitePage before OAuth),
+//      call process-invite to complete the join and navigate to the group.
+//   2. If the user hasn't completed onboarding, redirect to /onboarding.
+//   3. Otherwise do nothing — normal routing takes over.
+
+function PostAuthHandler() {
+  const { user, profile, isLoading } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const processedRef = useRef(false);
+
+  useEffect(() => {
+    // Wait until auth is fully resolved and profile is loaded
+    if (isLoading || !user || !profile || processedRef.current) return;
+    processedRef.current = true;
+
+    const token = sessionStorage.getItem(INVITE_TOKEN_KEY);
+    if (token) {
+      // Complete the cross-OAuth invite join
+      const groupName = sessionStorage.getItem("cya-invite-group-name") ?? "";
+      sessionStorage.removeItem(INVITE_TOKEN_KEY);
+      sessionStorage.removeItem("cya-invite-group-name");
+
+      supabase.functions
+        .invoke("process-invite", { body: { token, userId: user.id, type: "accept" } })
+        .then(({ data }) => {
+          if (data?.ok && data?.groupId) {
+            navigate(
+              `/group/${data.groupId}?welcome=${encodeURIComponent(data.groupName ?? groupName)}`,
+              { replace: true },
+            );
+          } else {
+            // Token invalid/expired — go to dashboard
+            navigate("/dashboard", { replace: true });
+          }
+        })
+        .catch(() => navigate("/dashboard", { replace: true }));
+      return;
+    }
+
+    // Send new users to phone-number onboarding (only on the dashboard landing page)
+    if (!profile.has_completed_onboarding && location.pathname === "/dashboard") {
+      navigate("/onboarding", { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, user?.id, profile?.has_completed_onboarding]);
+
+  return null;
+}
+
 // ─── Notifications Realtime singleton ────────────────────────────────────────
 // ONE channel per user, mounted here at the root so it's never duplicated even
 // when both BottomNav (via useUnreadCount) and NotificationsPage are mounted.
@@ -161,6 +216,7 @@ const App = () => (
         <TooltipProvider>
           <Sonner />
           <BrowserRouter>
+            <PostAuthHandler />
             <NotificationsRealtime />
             <PushPermissionBanner />
             <Routes>
@@ -226,6 +282,17 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <NotificationsPage />
+                  </ProtectedRoute>
+                }
+              />
+              {/* Public route — accessible without authentication */}
+              <Route path="/invite/:token" element={<InvitePage />} />
+
+              <Route
+                path="/onboarding"
+                element={
+                  <ProtectedRoute>
+                    <OnboardingPage />
                   </ProtectedRoute>
                 }
               />

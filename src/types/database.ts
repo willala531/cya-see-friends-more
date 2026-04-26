@@ -5,9 +5,10 @@ export interface DbUser {
   id: string;                         // uuid — matches auth.users.id
   email: string;
   display_name: string | null;
-  phone_number: string | null;
+  phone_number: string | null;        // E.164 format, e.g. +13105551234
   google_refresh_token: string | null; // stored after first Google OAuth
   interests: string[];
+  has_completed_onboarding: boolean;  // false for new users until phone collected
   created_at: string;
 }
 
@@ -26,10 +27,24 @@ export interface DbGroupMember {
   group_id: string;
   user_id: string;
   role: "admin" | "member";
+  can_invite: boolean;               // true = this member may send invites
   joined_at: string;
   // Populated by joins:
   users?: DbUser;
   groups?: DbGroup;
+}
+
+export interface DbGroupInvite {
+  id: string;
+  group_id: string;
+  invited_by: string;                // user_id of the sender
+  phone_number: string;              // E.164
+  status: "pending" | "accepted" | "declined" | "expired";
+  token: string;                     // crypto UUID — acts as a secret URL slug
+  created_at: string;
+  expires_at: string;
+  // Populated by join:
+  users?: Pick<DbUser, "id" | "display_name">;
 }
 
 export interface DbAvailabilityBlock {
@@ -110,4 +125,15 @@ export interface DbPushSubscription {
 // Convenience type: group row with its members array pre-joined
 export interface DbGroupWithMembers extends DbGroup {
   group_members: (Omit<DbGroupMember, "users"> & { users: DbUser })[];
+}
+
+// Shape returned by the get-invite Edge Function (public, no auth required)
+export interface InviteLookup {
+  groupName: string;
+  inviterName: string;
+  status: DbGroupInvite["status"];
+  groupId: string;
+  inviteId: string;
+  expiresAt: string;
+  isValid: boolean;                  // false if expired or already accepted/declined
 }

@@ -9,3 +9,25 @@ verify_jwt = false
 
 [functions."check-expiry"]
 verify_jwt = false
+
+# ── Invite flow ───────────────────────────────────────────────────────────────
+# verify_jwt = false because:
+#   - create-invite: called by authenticated clients but auth is enforced by the
+#     RLS-checked can_invite flag, not JWT.
+#   - get-invite: fully public — must work without a session (InvitePage).
+#   - process-invite: called both by logged-in users and by PostAuthHandler
+#     immediately after OAuth (before the client-side JWT is refreshed).
+#
+# TODO: Phase B — when Twilio is added, add TWILIO_ACCOUNT_SID,
+# TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER to the Supabase Edge Function
+# secrets via: supabase secrets set TWILIO_ACCOUNT_SID=... etc.
+# Also set SITE_URL to the production domain so invite links are correct.
+
+[functions."create-invite"]
+verify_jwt = false
+
+[functions."get-invite"]
+verify_jwt = false
+
+[functions."process-invite"]
+verify_jwt = false

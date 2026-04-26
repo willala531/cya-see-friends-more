@@ -28,6 +28,7 @@ export function useGroups() {
               id,
               user_id,
               role,
+              can_invite,
               joined_at,
               users ( id, display_name, email )
             )
@@ -64,6 +65,7 @@ export function useGroup(groupId: string | undefined) {
             id,
             user_id,
             role,
+            can_invite,
             joined_at,
             users ( id, display_name, email )
           )
@@ -99,9 +101,10 @@ export function useCreateGroup() {
 
       if (groupError) throw groupError;
 
+      // Creator always gets can_invite = true so they can invite from the group page
       const { error: memberError } = await supabase
         .from("group_members")
-        .insert({ group_id: group.id, user_id: user!.id, role: "admin" });
+        .insert({ group_id: group.id, user_id: user!.id, role: "admin", can_invite: true });
 
       if (memberError) throw memberError;
       return group;
@@ -157,6 +160,35 @@ export function useUpdateLastSuggested() {
         .from("groups")
         .update({ last_suggested_activity_id: activityId })
         .eq("id", groupId);
+      if (error) throw error;
+    },
+    onSuccess: (_data, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: ["group", groupId] });
+    },
+  });
+}
+
+/**
+ * Toggles can_invite on a group_members row.
+ * Only the group creator (checked server-side via RLS) should call this.
+ */
+export function useUpdateCanInvite() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      memberId,
+      groupId,
+      canInvite,
+    }: {
+      memberId: string;
+      groupId: string;
+      canInvite: boolean;
+    }) => {
+      const { error } = await supabase
+        .from("group_members")
+        .update({ can_invite: canInvite })
+        .eq("id", memberId);
       if (error) throw error;
     },
     onSuccess: (_data, { groupId }) => {
