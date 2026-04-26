@@ -251,7 +251,7 @@ const GroupPage = () => {
   const handleRsvp = (hangoutId: string, response: "yes" | "no" | "maybe") => {
     setRsvpStates((prev) => ({ ...prev, [hangoutId]: response }));
     updateRsvp.mutate(
-      { hangoutId, response },
+      { hangoutId, groupId: group.id, response },
       {
         onSuccess: () => {
           if (response === "yes") toast.success("You're in! 🙌");

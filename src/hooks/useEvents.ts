@@ -3,6 +3,16 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import type { DbHangoutSuggestion, DbHangoutVote } from "@/types/database";
 
+// ─── Query key constants ───────────────────────────────────────────────────────
+// Centralising key shapes here so invalidation is always consistent and never
+// accidentally blasts unrelated queries (which caused 5-6x duplicate requests).
+
+export const eventKeys = {
+  all:   (userId: string) => ["events", userId] as const,
+  group: (groupId: string) => ["events", "group", groupId] as const,
+  votes: (hangoutId: string) => ["votes", hangoutId] as const,
+};
+
 // ─── Read ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -13,7 +23,7 @@ export function useEvents() {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ["events", user?.id],
+    queryKey: eventKeys.all(user?.id ?? ""),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("hangout_suggestions")
@@ -31,6 +41,7 @@ export function useEvents() {
       return (data ?? []) as DbHangoutSuggestion[];
     },
     enabled: !!user,
+    staleTime: 30_000,
   });
 }
 
@@ -39,7 +50,7 @@ export function useGroupEvents(groupId: string | undefined) {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ["events", "group", groupId],
+    queryKey: eventKeys.group(groupId ?? ""),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("hangout_suggestions")
@@ -57,6 +68,9 @@ export function useGroupEvents(groupId: string | undefined) {
       return (data ?? []) as DbHangoutSuggestion[];
     },
     enabled: !!user && !!groupId,
+    // Realtime in useRsvpDecision invalidates this key on every RSVP change,
+    // so live updates still work even with a 30-second staleTime.
+    staleTime: 30_000,
   });
 }
 
@@ -65,7 +79,7 @@ export function useHangoutVotes(hangoutId: string | undefined) {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ["votes", hangoutId],
+    queryKey: eventKeys.votes(hangoutId ?? ""),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("hangout_votes")
@@ -75,6 +89,7 @@ export function useHangoutVotes(hangoutId: string | undefined) {
       return (data ?? []) as DbHangoutVote[];
     },
     enabled: !!user && !!hangoutId,
+    staleTime: 15_000,
   });
 }
 
@@ -82,7 +97,8 @@ export function useHangoutVotes(hangoutId: string | undefined) {
 
 /**
  * Upsert the current user's RSVP for a hangout.
- * Conflicts on (hangout_id, user_id) are updated in place.
+ * Requires groupId so we can invalidate only the relevant queries instead of
+ * blasting every events-* key (which caused duplicate refetches on Dashboard).
  */
 export function useUpdateRsvp() {
   const { user } = useAuth();
@@ -91,9 +107,11 @@ export function useUpdateRsvp() {
   return useMutation({
     mutationFn: async ({
       hangoutId,
+      groupId,
       response,
     }: {
       hangoutId: string;
+      groupId: string;
       response: "yes" | "no" | "maybe" | "pending";
     }) => {
       const { error } = await supabase.from("rsvps").upsert(
@@ -102,7 +120,11 @@ export function useUpdateRsvp() {
       );
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
+    onSuccess: (_data, { groupId }) => {
+      // Only invalidate the specific group's events + the dashboard list.
+      queryClient.invalidateQueries({ queryKey: eventKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: ["events", user?.id] });
+    },
   });
 }
 
@@ -151,9 +173,11 @@ export function useUpdateHangoutStatus() {
   return useMutation({
     mutationFn: async ({
       hangoutId,
+      groupId,
       status,
     }: {
       hangoutId: string;
+      groupId: string;
       status: "pending" | "confirmed" | "cancelled";
     }) => {
       const { error } = await supabase
@@ -162,7 +186,9 @@ export function useUpdateHangoutStatus() {
         .eq("id", hangoutId);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["events"] }),
+    onSuccess: (_data, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: eventKeys.group(groupId) });
+    },
   });
 }
 

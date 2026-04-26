@@ -1,17 +1,19 @@
-import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import type { DbNotification } from "@/types/database";
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
+// Note: the Realtime subscription that invalidates this query lives in
+// <NotificationsRealtime> (App.tsx) — a singleton component that ensures only
+// ONE channel is ever open regardless of how many components call useNotifications
+// simultaneously (e.g. BottomNav via useUnreadCount + NotificationsPage).
 
 /** All notifications for the current user, newest first. */
 export function useNotifications() {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
 
-  const query = useQuery({
+  return useQuery({
     queryKey: ["notifications", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -24,36 +26,8 @@ export function useNotifications() {
       return (data ?? []) as DbNotification[];
     },
     enabled: !!user,
+    staleTime: 60_000,
   });
-
-  // Real-time: push new notifications into cache as they arrive
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel(`notifications-${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          queryClient.invalidateQueries({
-            queryKey: ["notifications", user.id],
-          });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, queryClient]);
-
-  return query;
 }
 
 /** Number of unread notifications for the current user. */

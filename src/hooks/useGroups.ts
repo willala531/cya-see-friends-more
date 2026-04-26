@@ -39,6 +39,7 @@ export function useGroups() {
       return (data?.map((row) => row.groups).filter(Boolean) ?? []) as DbGroupWithMembers[];
     },
     enabled: !!user,
+    staleTime: 60_000,
   });
 }
 
@@ -74,6 +75,7 @@ export function useGroup(groupId: string | undefined) {
       return data as DbGroupWithMembers;
     },
     enabled: !!user && !!groupId,
+    staleTime: 60_000,
   });
 }
 

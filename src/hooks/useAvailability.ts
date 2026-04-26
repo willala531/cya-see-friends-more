@@ -26,6 +26,9 @@ export function useAvailabilityBlocks(userId?: string) {
       return (data ?? []) as DbAvailabilityBlock[];
     },
     enabled: !!targetId,
+    // Availability data changes rarely; 5-minute staleTime means GoogleCalendarContext
+    // (always mounted) and AvailabilityPage share the same cached fetch.
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -61,6 +64,10 @@ export function useGroupAvailabilityBlocks(groupId: string | undefined) {
       return (data ?? []) as DbAvailabilityBlock[];
     },
     enabled: !!user && !!groupId,
+    // 2-minute staleTime: group availability rarely changes mid-session.
+    // Mutations (upsertGoogleBlocks, upsertWeekSchedule) call invalidateQueries
+    // to force a refresh when data actually changes.
+    staleTime: 2 * 60_000,
   });
 }
 

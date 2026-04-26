@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -8,6 +8,7 @@ import { Bell, X } from "lucide-react";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { GoogleCalendarProvider } from "@/contexts/GoogleCalendarContext";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
+import { supabase } from "@/lib/supabase";
 import AuthPage from "./pages/AuthPage";
 import Dashboard from "./pages/Dashboard";
 import GroupPage from "./pages/GroupPage";
@@ -20,7 +21,21 @@ import NotificationsPage from "./pages/NotificationsPage";
 import BottomNav from "./components/BottomNav";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+// ─── Query client ─────────────────────────────────────────────────────────────
+// staleTime: 60 s means data fetched by one component is reused by every other
+// component that mounts within 60 s — eliminates the 5-6x duplicate requests
+// seen when BottomNav, Dashboard, and GoogleCalendarProvider all mount at once.
+// Realtime subscriptions call invalidateQueries to force fresh fetches when data
+// actually changes, so live-update behaviour is fully preserved.
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,   // 60 seconds
+      retry: 1,
+    },
+  },
+});
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, isLoading } = useAuth();
@@ -106,6 +121,37 @@ function PushPermissionBanner() {
   );
 }
 
+// ─── Notifications Realtime singleton ────────────────────────────────────────
+// ONE channel per user, mounted here at the root so it's never duplicated even
+// when both BottomNav (via useUnreadCount) and NotificationsPage are mounted.
+
+function NotificationsRealtime() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`notifications-rt-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, queryClient]);
+
+  return null;
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 const App = () => (
@@ -115,6 +161,7 @@ const App = () => (
         <TooltipProvider>
           <Sonner />
           <BrowserRouter>
+            <NotificationsRealtime />
             <PushPermissionBanner />
             <Routes>
               <Route path="/" element={<AuthPage />} />
