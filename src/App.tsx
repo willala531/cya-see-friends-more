@@ -21,6 +21,8 @@ import WelcomePage from "./pages/WelcomePage";
 import NotificationsPage from "./pages/NotificationsPage";
 import InvitePage from "./pages/InvitePage";
 import OnboardingPage from "./pages/OnboardingPage";
+import PrivacyPage from "./pages/PrivacyPage";
+import TermsPage from "./pages/TermsPage";
 import BottomNav from "./components/BottomNav";
 import NotFound from "./pages/NotFound";
 
@@ -285,8 +287,10 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
-              {/* Public route — accessible without authentication */}
+              {/* Public routes — accessible without authentication */}
               <Route path="/invite/:token" element={<InvitePage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/terms" element={<TermsPage />} />
 
               <Route
                 path="/onboarding"

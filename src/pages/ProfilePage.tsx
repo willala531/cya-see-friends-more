@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Clock, LogOut } from "lucide-react";
 import { cyaTransition } from "@/lib/motion";
 import GoogleCalendarConnect from "@/components/GoogleCalendarConnect";
@@ -84,7 +84,22 @@ const ProfilePage = () => {
         <LogOut size={14} /> sign out
       </motion.button>
 
-      <p className="text-center font-mono-data text-muted-foreground text-[10px] mt-8">
+      <div className="mt-8 flex items-center justify-center gap-4">
+        <Link
+          to="/privacy"
+          className="font-mono-data text-muted-foreground text-[10px] hover:text-foreground transition-colors"
+        >
+          PRIVACY POLICY
+        </Link>
+        <span className="text-border">·</span>
+        <Link
+          to="/terms"
+          className="font-mono-data text-muted-foreground text-[10px] hover:text-foreground transition-colors"
+        >
+          TERMS OF SERVICE
+        </Link>
+      </div>
+      <p className="text-center font-mono-data text-muted-foreground text-[10px] mt-2">
         cya v0.1 • coordination engine
       </p>
     </div>

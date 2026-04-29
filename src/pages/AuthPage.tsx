@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { cyaTransition } from "@/lib/motion";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -42,7 +42,22 @@ const AuthPage = () => {
           </motion.button>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-6 font-mono-data">
+        <div className="flex items-center justify-center gap-4 mt-6">
+          <Link
+            to="/privacy"
+            className="font-mono-data text-muted-foreground text-[10px] hover:text-foreground transition-colors"
+          >
+            PRIVACY POLICY
+          </Link>
+          <span className="text-muted-foreground text-[10px]">·</span>
+          <Link
+            to="/terms"
+            className="font-mono-data text-muted-foreground text-[10px] hover:text-foreground transition-colors"
+          >
+            TERMS OF SERVICE
+          </Link>
+        </div>
+        <p className="text-center text-xs text-muted-foreground mt-2 font-mono-data">
           v0.1 • coordination engine
         </p>
       </motion.div>
