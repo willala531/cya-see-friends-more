@@ -25,6 +25,7 @@ import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
 import BottomNav from "./components/BottomNav";
 import NotFound from "./pages/NotFound";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ─── Query client ─────────────────────────────────────────────────────────────
 // staleTime: 60 s means data fetched by one component is reused by every other
@@ -42,9 +43,30 @@ const queryClient = new QueryClient({
   },
 });
 
+// ─── App-shell skeleton ───────────────────────────────────────────────────────
+// Shown while the Supabase session is being restored from storage on first load
+// (direct URL visit or page refresh). Mirrors the dashboard layout so there is
+// no visible layout shift once content loads.
+
+function AppShellSkeleton() {
+  return (
+    <div className="min-h-screen bg-background pb-24 px-4 pt-6 max-w-lg mx-auto">
+      {/* Page header */}
+      <Skeleton className="h-6 w-24 mb-6 rounded-md" />
+      {/* Group cards */}
+      {[...Array(3)].map((_, i) => (
+        <Skeleton key={i} className="h-24 w-full mb-3 rounded-lg" />
+      ))}
+      {/* Secondary row */}
+      <Skeleton className="h-14 w-full mb-3 rounded-lg" />
+      <Skeleton className="h-14 w-full rounded-lg" />
+    </div>
+  );
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, isLoading } = useAuth();
-  if (isLoading) return <div className="min-h-screen bg-background" />;
+  if (isLoading) return <AppShellSkeleton />;
   if (!session) return <Navigate to="/" replace />;
   return <>{children}</>;
 }

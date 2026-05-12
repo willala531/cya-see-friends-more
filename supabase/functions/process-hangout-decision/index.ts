@@ -8,6 +8,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push";
+import { corsHeaders, handleCors } from "../_shared/cors.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -66,6 +67,9 @@ async function sendPushToUsers(
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  const preflight = handleCors(req);
+  if (preflight) return preflight;
+
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
@@ -79,7 +83,7 @@ Deno.serve(async (req) => {
   try {
     body = await req.json();
   } catch {
-    return new Response("Invalid JSON", { status: 400 });
+    return new Response("Invalid JSON", { status: 400, headers: corsHeaders(req) });
   }
 
   const { type, hangoutId, voteOptions } = body;
@@ -92,7 +96,7 @@ Deno.serve(async (req) => {
     .single();
 
   if (hangoutError || !hangout) {
-    return new Response("Hangout not found", { status: 404 });
+    return new Response("Hangout not found", { status: 404, headers: corsHeaders(req) });
   }
 
   const groupId: string = hangout.group_id;
@@ -116,7 +120,7 @@ Deno.serve(async (req) => {
   // ── confirm ────────────────────────────────────────────────────────────────
   if (type === "confirm") {
     if (hangout.status !== "pending") {
-      return new Response("Already resolved", { status: 200 });
+      return new Response("Already resolved", { status: 200, headers: corsHeaders(req) });
     }
 
     await supabase
@@ -158,7 +162,7 @@ Deno.serve(async (req) => {
   // ── cancel ─────────────────────────────────────────────────────────────────
   else if (type === "cancel") {
     if (hangout.status !== "pending") {
-      return new Response("Already resolved", { status: 200 });
+      return new Response("Already resolved", { status: 200, headers: corsHeaders(req) });
     }
 
     await supabase
@@ -174,10 +178,10 @@ Deno.serve(async (req) => {
   // ── vote ───────────────────────────────────────────────────────────────────
   else if (type === "vote") {
     if (hangout.vote_options != null) {
-      return new Response("Vote already started", { status: 200 });
+      return new Response("Vote already started", { status: 200, headers: corsHeaders(req) });
     }
     if (!voteOptions) {
-      return new Response("voteOptions required", { status: 400 });
+      return new Response("voteOptions required", { status: 400, headers: corsHeaders(req) });
     }
 
     const voteExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -200,7 +204,7 @@ Deno.serve(async (req) => {
       alt2Id: string | null;
     } | null;
     if (!opts) {
-      return new Response("No vote in progress", { status: 200 });
+      return new Response("No vote in progress", { status: 200, headers: corsHeaders(req) });
     }
 
     // Tally votes
@@ -242,6 +246,6 @@ Deno.serve(async (req) => {
   }
 
   return new Response(JSON.stringify({ ok: true }), {
-    headers: { "Content-Type": "application/json" },
+    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
   });
 });

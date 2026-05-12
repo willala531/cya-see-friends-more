@@ -12,6 +12,7 @@
 //   { groupName, inviterName, status, groupId, inviteId, expiresAt, isValid }
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders, handleCors } from "../_shared/cors.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -19,6 +20,9 @@ const supabase = createClient(
 );
 
 Deno.serve(async (req) => {
+  const preflight = handleCors(req);
+  if (preflight) return preflight;
+
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
@@ -29,7 +33,7 @@ Deno.serve(async (req) => {
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
@@ -38,7 +42,7 @@ Deno.serve(async (req) => {
   if (!token) {
     return new Response(JSON.stringify({ error: "token is required" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
@@ -60,7 +64,7 @@ Deno.serve(async (req) => {
   if (error || !invite) {
     return new Response(
       JSON.stringify({ isValid: false, error: "Invite not found" }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
+      { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
     );
   }
 
@@ -92,6 +96,6 @@ Deno.serve(async (req) => {
       inviterName: inviter?.display_name ?? "Someone",
       expiresAt: invite.expires_at,
     }),
-    { status: 200, headers: { "Content-Type": "application/json" } },
+    { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
   );
 });

@@ -15,6 +15,7 @@
 //   { ok: boolean, groupId?: string, groupName?: string }
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders, handleCors } from "../_shared/cors.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -54,6 +55,9 @@ async function acceptInvite(
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  const preflight = handleCors(req);
+  if (preflight) return preflight;
+
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
@@ -69,7 +73,7 @@ Deno.serve(async (req) => {
   } catch {
     return new Response(JSON.stringify({ ok: false, error: "Invalid JSON body" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
@@ -78,7 +82,7 @@ Deno.serve(async (req) => {
   if (!userId || !type) {
     return new Response(
       JSON.stringify({ ok: false, error: "userId and type are required" }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
+      { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
     );
   }
 
@@ -88,7 +92,7 @@ Deno.serve(async (req) => {
     if (!token) {
       return new Response(
         JSON.stringify({ ok: false, error: "token is required for accept/decline" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
       );
     }
 
@@ -108,7 +112,7 @@ Deno.serve(async (req) => {
     if (error || !invite) {
       return new Response(
         JSON.stringify({ ok: false, error: "Invite not found" }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
       );
     }
 
@@ -123,7 +127,7 @@ Deno.serve(async (req) => {
       }
       return new Response(
         JSON.stringify({ ok: false, error: "Invite has expired or already been used" }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
       );
     }
 
@@ -137,7 +141,7 @@ Deno.serve(async (req) => {
           groupId: invite.group_id,
           groupName: group?.name ?? "",
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
       );
     }
 
@@ -149,7 +153,7 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ ok: true }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
+      { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
     );
   }
 
@@ -159,7 +163,7 @@ Deno.serve(async (req) => {
     if (!phoneNumber) {
       return new Response(
         JSON.stringify({ ok: false, error: "phoneNumber required for phone-match" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
       );
     }
 
@@ -177,12 +181,12 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ ok: true, joined: (pendingInvites ?? []).length }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
+      { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
     );
   }
 
   return new Response(
     JSON.stringify({ ok: false, error: "Unknown type" }),
-    { status: 400, headers: { "Content-Type": "application/json" } },
+    { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
   );
 });

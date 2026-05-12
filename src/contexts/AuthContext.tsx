@@ -57,51 +57,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Hydrate from the existing Supabase session on first render
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        const p = await fetchOrCreateProfile(
-          session.user.id,
-          session.user.email ?? "",
-          session.user.user_metadata?.full_name ??
-            session.user.email?.split("@")[0] ??
-            "User",
-        );
-        setProfile(p);
-        // Persist refresh token whenever we receive one
-        if (session.provider_refresh_token) {
-          await supabase
-            .from("users")
-            .update({ google_refresh_token: session.provider_refresh_token })
-            .eq("id", session.user.id);
-        }
-      }
-      setIsLoading(false);
-    });
-
-    // Stay in sync with auth state changes (sign-in redirect, sign-out, etc.)
+    // onAuthStateChange fires INITIAL_SESSION immediately on mount in supabase-js v2,
+    // which is the canonical way to hydrate auth state. We do NOT call getSession()
+    // separately — doing both creates a race where getSession() can resolve with null
+    // before the session is restored from storage, flipping isLoading to false with
+    // session=null and causing ProtectedRoute to redirect authenticated users to "/".
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
+
       if (session?.user) {
-        const p = await fetchOrCreateProfile(
-          session.user.id,
-          session.user.email ?? "",
-          session.user.user_metadata?.full_name ??
-            session.user.email?.split("@")[0] ??
-            "User",
-        );
-        setProfile(p);
-        if (session.provider_refresh_token) {
-          await supabase
-            .from("users")
-            .update({ google_refresh_token: session.provider_refresh_token })
-            .eq("id", session.user.id);
+        try {
+          const p = await fetchOrCreateProfile(
+            session.user.id,
+            session.user.email ?? "",
+            session.user.user_metadata?.full_name ??
+              session.user.email?.split("@")[0] ??
+              "User",
+          );
+          setProfile(p);
+          // Persist refresh token whenever we receive one
+          if (session.provider_refresh_token) {
+            await supabase
+              .from("users")
+              .update({ google_refresh_token: session.provider_refresh_token })
+              .eq("id", session.user.id);
+          }
+        } finally {
+          // Always clear loading — even if fetchOrCreateProfile throws,
+          // so the UI never hangs indefinitely on a blank screen.
+          setIsLoading(false);
         }
       } else {
         setProfile(null);
+        setIsLoading(false);
       }
     });
 

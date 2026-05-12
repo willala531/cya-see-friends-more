@@ -255,6 +255,17 @@ const GroupPage = () => {
     }
   }, [voteEvent?.id, myVote]);
 
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  // handleDismissRsvp must live here — BEFORE the early return — because
+  // useCallback is a hook and hooks must be called unconditionally on every
+  // render. Calling it after `if (groupLoading || !group) return` would mean
+  // it is skipped on the loading render and called on the data render, which
+  // changes the hook count between renders and throws React error #310.
+  const handleDismissRsvp = useCallback(() => {
+    if (firstUnanswered) dismissedRef.current.add(firstUnanswered.id);
+    setShowRsvpModal(false);
+  }, [firstUnanswered]);
+
   // ── Loading state ─────────────────────────────────────────────────────────
   if (groupLoading || !group) {
     return (
@@ -266,7 +277,6 @@ const GroupPage = () => {
     );
   }
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
   const handleCopyInvite = () => {
     navigator.clipboard.writeText(`https://cya.app/join/${group.invite_code}`);
     toast.success("Invite link copied!");
@@ -302,11 +312,6 @@ const GroupPage = () => {
       { onSuccess: () => toast("Vote recorded!") },
     );
   };
-
-  const handleDismissRsvp = useCallback(() => {
-    if (firstUnanswered) dismissedRef.current.add(firstUnanswered.id);
-    setShowRsvpModal(false);
-  }, [firstUnanswered]);
 
   return (
     <>

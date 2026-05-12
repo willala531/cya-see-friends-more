@@ -12,6 +12,7 @@
 //   { token: string, inviteUrl: string, inviteId: string }
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders, handleCors } from "../_shared/cors.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -32,6 +33,9 @@ function getBaseUrl(): string {
 }
 
 Deno.serve(async (req) => {
+  const preflight = handleCors(req);
+  if (preflight) return preflight;
+
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
@@ -42,7 +46,7 @@ Deno.serve(async (req) => {
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
@@ -53,14 +57,14 @@ Deno.serve(async (req) => {
   if (!groupId || !phoneNumber || !invitedByUserId) {
     return new Response(
       JSON.stringify({ error: "groupId, phoneNumber, and invitedByUserId are required" }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
+      { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
     );
   }
 
   if (!isE164(phoneNumber)) {
     return new Response(
       JSON.stringify({ error: "phoneNumber must be in E.164 format, e.g. +13105551234" }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
+      { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
     );
   }
 
@@ -92,7 +96,7 @@ Deno.serve(async (req) => {
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
     inviteId = updated.id;
@@ -113,7 +117,7 @@ Deno.serve(async (req) => {
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
       });
     }
     inviteId = created.id;
@@ -138,6 +142,6 @@ Deno.serve(async (req) => {
 
   return new Response(
     JSON.stringify({ token, inviteUrl, inviteId }),
-    { status: 200, headers: { "Content-Type": "application/json" } },
+    { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
   );
 });
