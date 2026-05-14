@@ -189,6 +189,19 @@ const GroupPage = () => {
   useEffect(() => {
     if (!suggestion || !nearestSlot || !group || eventsLoading) return;
 
+    // Guard 1: don't create while any suggestion is still pending RSVP.
+    // One active proposal per group at a time.
+    const hasPending = events.some((e) => e.status === "pending");
+    if (hasPending) return;
+
+    // Guard 2: don't create while a confirmed hangout is still in the future.
+    // Wait until after that hangout's date before generating the next one.
+    const now = new Date();
+    const hasFutureConfirmed = events.some(
+      (e) => e.status === "confirmed" && e.start_time && new Date(e.start_time) > now,
+    );
+    if (hasFutureConfirmed) return;
+
     const key = `${nearestSlot.start}::${suggestion.id}`;
     if (savedKeyRef.current === key) return;
 

@@ -67,85 +67,67 @@ const RsvpModal = ({
         onClick={onDismiss}
       />
 
-      {/* Sheet */}
+      {/*
+        Sheet — z-[60] sits above BottomNav (z-50).
+        Structure: flex column with a scrollable content region and a
+        sticky button footer that always clears the bottom nav bar (≈80px).
+        max-h-[85dvh] prevents the sheet from consuming the full screen on
+        tall content, giving room to see the page behind the backdrop.
+      */}
       <motion.div
         key="rsvp-sheet"
         initial={{ y: "100%", opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: "100%", opacity: 0 }}
         transition={cyaTransition}
-        className="fixed bottom-0 left-0 right-0 z-50 max-w-lg mx-auto"
+        className="fixed bottom-0 left-0 right-0 z-[60] max-w-lg mx-auto"
       >
-        <div className="glass-surface rounded-t-2xl p-5 pb-8">
-          {/* Header */}
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">{emoji}</span>
-              <div>
-                <p className="font-mono-data text-[10px] text-muted-foreground">
-                  HANGOUT PROPOSAL
-                </p>
-                <h2 className="text-lg text-heading leading-tight">
-                  {event.suggested_activity}
-                </h2>
+        <div className="glass-surface rounded-t-2xl flex flex-col max-h-[85dvh] overflow-hidden">
+
+          {/* ── Scrollable content ─────────────────────────────────────────── */}
+          <div className="overflow-y-auto flex-1 p-5 pb-3">
+            {/* Header */}
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{emoji}</span>
+                <div>
+                  <p className="font-mono-data text-[10px] text-muted-foreground">
+                    HANGOUT PROPOSAL
+                  </p>
+                  <h2 className="text-lg text-heading leading-tight">
+                    {event.suggested_activity}
+                  </h2>
+                </div>
               </div>
-            </div>
-            <button
-              onClick={onDismiss}
-              className="w-7 h-7 rounded-md bg-secondary flex items-center justify-center"
-            >
-              <X size={14} className="text-muted-foreground" />
-            </button>
-          </div>
-
-          {/* Time */}
-          {event.start_time && event.end_time && (
-            <div className="bg-secondary/60 rounded-lg px-3 py-2.5 mb-4">
-              <p className="text-sm font-medium text-foreground">
-                {friendlyDate(event.start_time)},{" "}
-                {format(new Date(event.start_time), "MMMM do")}
-              </p>
-              <p className="font-mono-data text-primary mt-0.5">
-                {friendlyTime(event.start_time, event.end_time)}
-              </p>
-              {userIsSynced && (
-                <p className="text-xs text-accent mt-1">
-                  You're free — we checked ✓
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Response buttons or current response */}
-          {!hasResponded ? (
-            <div className="space-y-2">
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={() => onRespond("yes")}
-                className="w-full py-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-gloss"
+              <button
+                onClick={onDismiss}
+                className="w-7 h-7 rounded-md bg-secondary flex items-center justify-center shrink-0"
               >
-                🙌 I'm in
-              </motion.button>
-              <div className="flex gap-2">
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => onRespond("no")}
-                  className="flex-1 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium"
-                >
-                  Can't make it
-                </motion.button>
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => onRespond("maybe")}
-                  className="flex-1 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium"
-                >
-                  😐 Not vibing
-                </motion.button>
-              </div>
+                <X size={14} className="text-muted-foreground" />
+              </button>
             </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="text-center py-2">
+
+            {/* Time */}
+            {event.start_time && event.end_time && (
+              <div className="bg-secondary/60 rounded-lg px-3 py-2.5">
+                <p className="text-sm font-medium text-foreground">
+                  {friendlyDate(event.start_time)},{" "}
+                  {format(new Date(event.start_time), "MMMM do")}
+                </p>
+                <p className="font-mono-data text-primary mt-0.5">
+                  {friendlyTime(event.start_time, event.end_time)}
+                </p>
+                {userIsSynced && (
+                  <p className="text-xs text-accent mt-1">
+                    You're free — we checked ✓
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Show current response label when already responded */}
+            {hasResponded && (
+              <div className="mt-4 text-center">
                 <p className="text-sm text-muted-foreground">Your response:</p>
                 <p className="text-base font-medium text-foreground mt-0.5">
                   {currentResponse === "yes"
@@ -154,10 +136,47 @@ const RsvpModal = ({
                       ? "Can't make it"
                       : "😐 Not vibing"}
                 </p>
+                <p className="font-mono-data text-[10px] text-muted-foreground mt-1">
+                  TAP BELOW TO CHANGE YOUR RESPONSE
+                </p>
               </div>
-              <p className="font-mono-data text-[10px] text-muted-foreground text-center">
-                TAP BELOW TO CHANGE YOUR RESPONSE
-              </p>
+            )}
+          </div>
+
+          {/*
+            ── Sticky action buttons ──────────────────────────────────────────
+            flex-shrink-0 keeps buttons visible even when the scroll area is tall.
+            pb-[5.5rem] = 88px clears the 80px BottomNav with 8px breathing room.
+            The border-top provides a visual separator from the scrolled content.
+          */}
+          <div className="flex-shrink-0 px-5 pt-3 pb-[5.5rem] border-t border-border/30 bg-background/80 backdrop-blur-sm">
+            {!hasResponded ? (
+              <div className="space-y-2">
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => onRespond("yes")}
+                  className="w-full py-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-gloss"
+                >
+                  🙌 I'm in
+                </motion.button>
+                <div className="flex gap-2">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => onRespond("no")}
+                    className="flex-1 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium"
+                  >
+                    Can't make it
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => onRespond("maybe")}
+                    className="flex-1 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium"
+                  >
+                    😐 Not vibing
+                  </motion.button>
+                </div>
+              </div>
+            ) : (
               <div className="flex gap-2">
                 {(["yes", "no", "maybe"] as const).map((r) => (
                   <motion.button
@@ -174,8 +193,9 @@ const RsvpModal = ({
                   </motion.button>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
         </div>
       </motion.div>
     </AnimatePresence>

@@ -119,13 +119,19 @@ export function findGroupAvailability(
 /**
  * Returns the single soonest window where all members are free for
  * durationMinutes, or null if none exists in the next 4 weeks.
+ *
+ * Enforces a minimum 24-hour lead time: slots starting within the next
+ * 24 hours are excluded so the app never suggests a same-day hangout
+ * that users can't realistically prepare for.
  */
 export function getNearestSlot(
   members: MemberAvailability[],
   durationMinutes: number,
 ): { start: string; end: string } | null {
   const slots = findGroupAvailability(members, durationMinutes);
-  return slots.length > 0 ? slots[0] : null;
+  const earliestAllowed = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const validSlots = slots.filter((s) => new Date(s.start) >= earliestAllowed);
+  return validSlots.length > 0 ? validSlots[0] : null;
 }
 
 // ─── Supabase → BusyInterval bridge ──────────────────────────────────────────
