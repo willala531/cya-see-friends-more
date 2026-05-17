@@ -31,7 +31,11 @@ const AuthPage = () => {
         className="w-full max-w-sm"
       >
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">cya</h1>
+          <img
+            src="/logo.png"
+            alt="cya"
+            className="h-24 w-auto mx-auto mb-2"
+          />
           <p className="text-body mt-1">see friends more.</p>
         </div>
 
