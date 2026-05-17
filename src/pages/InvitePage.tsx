@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProcessInvite } from "@/hooks/useInvites";
 import { supabase } from "@/lib/supabase";
 import type { InviteLookup } from "@/types/database";
+import { usePostHog } from "@posthog/react";
 
 // ─── Storage key for cross-OAuth invite handoff ───────────────────────────────
 export const INVITE_TOKEN_KEY = "cya-invite-token";
@@ -19,6 +20,7 @@ const InvitePage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const processInvite = useProcessInvite();
+  const posthog = usePostHog();
 
   const [invite, setInvite] = useState<InviteLookup | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "valid" | "invalid">("loading");
@@ -77,6 +79,7 @@ const InvitePage = () => {
         type: "accept",
       });
       if (result.ok && result.groupId) {
+        posthog.capture("invite_joined", { group_id: result.groupId, group_name: result.groupName });
         setActionState("joined");
         toast.success(`Welcome to ${result.groupName ?? "the group"}! 🎉`);
         setTimeout(() => {
@@ -105,6 +108,7 @@ const InvitePage = () => {
         userId: user?.id ?? "anonymous",
         type: "decline",
       });
+      posthog.capture("invite_declined", { group_name: invite?.groupName });
       setActionState("declined");
     } catch {
       toast.error("Something went wrong");

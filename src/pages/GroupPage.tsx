@@ -27,6 +27,7 @@ import RsvpModal from "@/components/RsvpModal";
 import VoteModal from "@/components/VoteModal";
 import ConfettiOverlay from "@/components/ConfettiOverlay";
 import InviteModal from "@/components/InviteModal";
+import { usePostHog } from "@posthog/react";
 
 // ─── Pending event the current user hasn't answered yet ───────────────────────
 
@@ -97,6 +98,7 @@ const GroupPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const posthog = usePostHog();
 
   const { data: group, isLoading: groupLoading } = useGroup(groupId);
   const { data: events = [], isLoading: eventsLoading } = useGroupEvents(groupId);
@@ -296,6 +298,7 @@ const GroupPage = () => {
 
   const handleRsvp = (hangoutId: string, response: "yes" | "no" | "maybe") => {
     setRsvpStates((prev) => ({ ...prev, [hangoutId]: response }));
+    posthog.capture("rsvp_submitted", { hangout_id: hangoutId, group_id: group.id, response });
     updateRsvp.mutate(
       { hangoutId, groupId: group.id, response },
       {
@@ -319,6 +322,7 @@ const GroupPage = () => {
 
   const handleVote = (activityId: string) => {
     if (!voteEvent) return;
+    posthog.capture("vote_cast", { hangout_id: voteEvent.id, activity_id: activityId, group_id: group?.id });
     castVote.mutate(
       { hangoutId: voteEvent.id, activityId },
       { onSuccess: () => toast("Vote recorded!") },

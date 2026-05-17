@@ -4,15 +4,18 @@ import { Clock, LogOut } from "lucide-react";
 import { cyaTransition } from "@/lib/motion";
 import GoogleCalendarConnect from "@/components/GoogleCalendarConnect";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePostHog } from "@posthog/react";
 
 const ProfilePage = () => {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
+  const posthog = usePostHog();
 
   const displayName = profile?.display_name ?? "User";
   const email = profile?.email ?? "";
 
   const handleLogout = async () => {
+    posthog.capture("user_signed_out");
     await signOut();
     navigate("/");
   };

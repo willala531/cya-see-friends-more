@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { cyaTransition } from "@/lib/motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompleteOnboarding } from "@/hooks/useInvites";
+import { usePostHog } from "@posthog/react";
 
 // ─── E.164 validation ─────────────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ const OnboardingPage = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const completeOnboarding = useCompleteOnboarding();
+  const posthog = usePostHog();
 
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState("");
@@ -33,6 +35,7 @@ const OnboardingPage = () => {
     }
     try {
       await completeOnboarding.mutateAsync({ phoneNumber: trimmed });
+      posthog.capture("onboarding_completed", { phone_provided: true });
       toast.success("Phone number saved!");
       navigate("/dashboard", { replace: true });
     } catch {
@@ -41,6 +44,7 @@ const OnboardingPage = () => {
   };
 
   const handleSkip = async () => {
+    posthog.capture("onboarding_skipped");
     try {
       await completeOnboarding.mutateAsync({ phoneNumber: null });
     } catch {

@@ -7,6 +7,7 @@ import { cyaTransition } from "@/lib/motion";
 import { useCreateGroup } from "@/hooks/useGroups";
 import { useCreateInvite } from "@/hooks/useInvites";
 import DevInviteLinks from "@/components/DevInviteLinks";
+import { usePostHog } from "@posthog/react";
 
 // ─── E.164 validation ─────────────────────────────────────────────────────────
 
@@ -25,6 +26,7 @@ const CreateGroupPage = () => {
   const navigate = useNavigate();
   const createGroup = useCreateGroup();
   const createInvite = useCreateInvite();
+  const posthog = usePostHog();
 
   const [step, setStep] = useState<"name" | "invite" | "done">("name");
   const [groupName, setGroupName] = useState("");
@@ -46,6 +48,7 @@ const CreateGroupPage = () => {
     }
     createGroup.mutate(groupName, {
       onSuccess: (group) => {
+        posthog.capture("group_created", { group_name: groupName, group_id: group.id });
         setGroupId(group.id);
         setStep("invite");
       },
@@ -100,6 +103,7 @@ const CreateGroupPage = () => {
     setIsSending(false);
 
     if (links.length > 0) {
+      posthog.capture("invites_sent", { invite_count: links.length, group_id: groupId });
       toast.success(
         `Invite${links.length > 1 ? "s" : ""} created for ${links.length} number${links.length > 1 ? "s" : ""}!`,
       );

@@ -8,6 +8,7 @@ import { Bell, X } from "lucide-react";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { GoogleCalendarProvider } from "@/contexts/GoogleCalendarContext";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
+import { usePostHog } from "@posthog/react";
 import { supabase } from "@/lib/supabase";
 import { INVITE_TOKEN_KEY } from "@/pages/InvitePage";
 import AuthPage from "./pages/AuthPage";
@@ -83,6 +84,7 @@ function PushPermissionBanner() {
   const { permission, isPushSupported, isRegistering, requestAndSubscribe } =
     usePushSubscription();
   const [visible, setVisible] = useState(false);
+  const posthog = usePostHog();
 
   useEffect(() => {
     if (!session || !isPushSupported || permission !== "default") return;
@@ -97,6 +99,7 @@ function PushPermissionBanner() {
   }, [session, isPushSupported, permission, location.pathname]);
 
   const handleAllow = async () => {
+    posthog.capture("push_notifications_allowed");
     setVisible(false);
     await requestAndSubscribe();
   };

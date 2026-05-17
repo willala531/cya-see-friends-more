@@ -3,10 +3,17 @@ import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { cyaTransition } from "@/lib/motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePostHog } from "@posthog/react";
 
 const AuthPage = () => {
   const { signInWithGoogle, isLoading, session } = useAuth();
   const navigate = useNavigate();
+  const posthog = usePostHog();
+
+  const handleSignIn = () => {
+    posthog.capture("sign_in_clicked");
+    signInWithGoogle();
+  };
 
   // Redirect already-authenticated users straight to their dashboard
   useEffect(() => {
@@ -34,7 +41,7 @@ const AuthPage = () => {
           </p>
           <motion.button
             whileTap={{ scale: 0.96 }}
-            onClick={signInWithGoogle}
+            onClick={handleSignIn}
             disabled={isLoading}
             className="w-full py-2.5 bg-primary text-primary-foreground font-medium text-sm rounded-md shadow-gloss hover:shadow-gloss-hover transition-shadow duration-150 disabled:opacity-50"
           >

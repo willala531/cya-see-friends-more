@@ -9,6 +9,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import type { DbUser } from "@/types/database";
+import posthog from "posthog-js";
 
 // ─── Context type ─────────────────────────────────────────────────────────────
 
@@ -64,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // session=null and causing ProtectedRoute to redirect authenticated users to "/".
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
 
       if (session?.user) {
@@ -83,6 +84,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               .from("users")
               .update({ google_refresh_token: session.provider_refresh_token })
               .eq("id", session.user.id);
+          }
+          posthog.identify(session.user.id, {
+            email: session.user.email,
+            name: session.user.user_metadata?.full_name,
+          });
+          if (event === "SIGNED_IN") {
+            posthog.capture("user_signed_in");
           }
         } finally {
           // Always clear loading — even if fetchOrCreateProfile throws,
@@ -117,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    posthog.reset();
   }, []);
 
   return (

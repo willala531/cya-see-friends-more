@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { cyaTransition } from "@/lib/motion";
 import { useGoogleCalendar } from "@/contexts/GoogleCalendarContext";
 import { useAvailabilityBlocks, useUpsertWeekSchedule } from "@/hooks/useAvailability";
+import { usePostHog } from "@posthog/react";
 
 // ─── Existing weekly schedule types (unchanged) ───────────────────────────────
 
@@ -65,6 +66,7 @@ const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const AvailabilityPage = () => {
   const navigate = useNavigate();
+  const posthog = usePostHog();
 
   // Existing weekly schedule — loaded from Supabase on mount
   const [schedule, setSchedule] = useState<WeekSchedule>(defaultSchedule);
@@ -156,6 +158,7 @@ const AvailabilityPage = () => {
   const handleSave = () => {
     upsertWeekSchedule.mutate(schedule as unknown as Record<string, unknown>, {
       onSuccess: () => {
+        posthog.capture("availability_saved");
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
       },
@@ -213,7 +216,7 @@ const AvailabilityPage = () => {
           </div>
           <motion.button
             whileTap={{ scale: 0.92 }}
-            onClick={() => syncCalendar()}
+            onClick={() => { posthog.capture("calendar_synced"); syncCalendar(); }}
             disabled={isSyncing}
             className="flex items-center gap-1 text-primary text-[11px] font-mono-data disabled:opacity-50"
           >
