@@ -1,8 +1,10 @@
-import { motion } from "framer-motion";
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
-import { Clock, LogOut } from "lucide-react";
+import { Clock, LogOut, MessageSquare } from "lucide-react";
 import { cyaTransition } from "@/lib/motion";
 import GoogleCalendarConnect from "@/components/GoogleCalendarConnect";
+import FeedbackModal from "@/components/FeedbackModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePostHog } from "@posthog/react";
 
@@ -10,6 +12,7 @@ const ProfilePage = () => {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
   const posthog = usePostHog();
+  const [showFeedback, setShowFeedback] = useState(false);
 
   const displayName = profile?.display_name ?? "User";
   const email = profile?.email ?? "";
@@ -79,6 +82,30 @@ const ProfilePage = () => {
         </p>
       </motion.div>
 
+      {/* Feedback */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ ...cyaTransition, delay: 0.15 }}
+        className="glass-surface rounded-lg p-4 mb-4"
+      >
+        <h2 className="font-mono-data text-muted-foreground mb-3">Feedback</h2>
+        <motion.button
+          whileTap={{ scale: 0.96 }}
+          onClick={() => setShowFeedback(true)}
+          className="w-full flex items-center justify-between py-2"
+        >
+          <div className="flex items-center gap-2.5">
+            <MessageSquare size={16} className="text-muted-foreground" />
+            <span className="text-sm text-foreground">Send Feedback</span>
+          </div>
+          <span className="text-primary text-xs font-mono-data">OPEN →</span>
+        </motion.button>
+        <p className="text-body text-xs mt-1">
+          Report a bug or share an idea to help us improve cya.
+        </p>
+      </motion.div>
+
       <motion.button
         whileTap={{ scale: 0.96 }}
         onClick={handleLogout}
@@ -105,6 +132,12 @@ const ProfilePage = () => {
       <p className="text-center font-mono-data text-muted-foreground text-[10px] mt-2">
         cya v0.1 • coordination engine
       </p>
+
+      <AnimatePresence>
+        {showFeedback && (
+          <FeedbackModal onDismiss={() => setShowFeedback(false)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

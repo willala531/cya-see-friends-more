@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import pkg from "./package.json";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -17,5 +18,11 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  define: {
+    // Bakes the package.json version into the bundle so FeedbackModal can
+    // include it in submissions without any runtime file-system access.
+    // Access via: import.meta.env.VITE_APP_VERSION
+    "import.meta.env.VITE_APP_VERSION": JSON.stringify(pkg.version),
   },
 }));

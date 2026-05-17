@@ -123,6 +123,21 @@ export interface DbPushSubscription {
   created_at: string;
 }
 
+export interface DbFeedback {
+  id: string;
+  user_id: string | null;
+  type: "bug" | "suggestion";
+  page: string | null;
+  message: string;
+  browser: string | null;
+  os: string | null;
+  screen_resolution: string | null;
+  app_version: string | null;
+  user_email: string | null;
+  user_display_name: string | null;
+  created_at: string;
+}
+
 // Convenience type: group row with its members array pre-joined
 export interface DbGroupWithMembers extends DbGroup {
   group_members: (Omit<DbGroupMember, "users"> & { users: DbUser })[];

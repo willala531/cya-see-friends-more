@@ -7,13 +7,39 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const supabase = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-);
+// ── Startup diagnostics ───────────────────────────────────────────────────────
+// This log fires before Deno.serve registers. If the function crashes before
+// printing this, the issue is earlier (bad import, Deno version, etc.).
+console.log("[create-calendar-event] module loading…");
 
-const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID")!;
-const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!;
+const REQUIRED_SECRETS = [
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+] as const;
+
+for (const key of REQUIRED_SECRETS) {
+  const present = !!Deno.env.get(key);
+  console.log(`[create-calendar-event] ${key}: ${present ? "✓ present" : "✗ MISSING"}`);
+}
+
+let supabase: ReturnType<typeof createClient>;
+let GOOGLE_CLIENT_ID: string;
+let GOOGLE_CLIENT_SECRET: string;
+
+try {
+  supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") ?? "";
+  GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") ?? "";
+  console.log("[create-calendar-event] module initialised OK");
+} catch (err) {
+  console.error("[create-calendar-event] FATAL — module-level init failed:", err);
+  throw err; // re-throw so Deno surfaces the error in function logs
+}
 
 async function getAccessToken(refreshToken: string): Promise<string | null> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -50,16 +76,36 @@ async function createEvent(
         summary,
         start: { dateTime: startTime },
         end: { dateTime: endTime },
-        description: "Organized by CYA — See Friends More",
+        description: "Organized by cya — See Friends More",
       }),
     },
   );
   return res.ok;
 }
 
+console.log("[create-calendar-event] Deno.serve registering…");
+
 Deno.serve(async (req) => {
+  console.log("[create-calendar-event] request received:", req.method);
+
+  try {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
+  }
+
+  let body: {
+    hangoutId: string;
+    activityName: string;
+    groupId: string;
+    startTime: string;
+    endTime: string;
+    yesUserIds: string[];
+  };
+  try {
+    body = await req.json();
+  } catch (parseErr) {
+    console.error("[create-calendar-event] failed to parse request body:", parseErr);
+    return new Response("Invalid JSON body", { status: 400 });
   }
 
   const {
@@ -69,14 +115,7 @@ Deno.serve(async (req) => {
     startTime,
     endTime,
     yesUserIds,
-  }: {
-    hangoutId: string;
-    activityName: string;
-    groupId: string;
-    startTime: string;
-    endTime: string;
-    yesUserIds: string[];
-  } = await req.json();
+  } = body;
 
   if (!yesUserIds?.length) {
     return new Response(JSON.stringify({ ok: true }), {
@@ -137,4 +176,12 @@ Deno.serve(async (req) => {
     JSON.stringify({ ok: true, failedUserIds }),
     { headers: { "Content-Type": "application/json" } },
   );
+
+  } catch (err) {
+    console.error("[create-calendar-event] unhandled error in request handler:", err);
+    return new Response(
+      JSON.stringify({ ok: false, error: String(err) }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
 });
