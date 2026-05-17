@@ -43,7 +43,7 @@ const Dashboard = () => {
           <p className="text-body text-xs mt-0.5">
             {groupsLoading
               ? "loading…"
-              : `${groups.length} group${groups.length !== 1 ? "s" : ""} • ${events.length} event${events.length !== 1 ? "s" : ""}`}
+              : `${groups.length} group${groups.length !== 1 ? "s" : ""} • ${events.length} upcoming`}
           </p>
         </div>
         <motion.button

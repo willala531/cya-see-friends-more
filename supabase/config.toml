@@ -23,6 +23,9 @@ verify_jwt = false
 # secrets via: supabase secrets set TWILIO_ACCOUNT_SID=... etc.
 # Also set SITE_URL to the production domain so invite links are correct.
 
+[functions."create-suggestion"]
+verify_jwt = false
+
 [functions."create-invite"]
 verify_jwt = false
 

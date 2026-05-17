@@ -20,6 +20,7 @@ export interface DbGroup {
   created_at: string;
   group_interests: string[];          // activity IDs selected by the group
   last_suggested_activity_id: string | null; // for repeat-filter persistence
+  last_hangout_at: string | null;     // set when a confirmed hangout's start_time passes
 }
 
 export interface DbGroupMember {
@@ -68,7 +69,7 @@ export interface DbHangoutSuggestion {
   start_time: string | null;
   end_time: string | null;
   suggested_activity: string | null;
-  status: "pending" | "confirmed" | "cancelled";
+  status: "pending" | "confirmed" | "cancelled" | "expired" | "paused" | "completed";
   created_at: string;
   // New columns for RSVP flow:
   reminder_sent: boolean;

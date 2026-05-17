@@ -123,6 +123,73 @@ Deno.serve(async (req) => {
       return new Response("Already resolved", { status: 200, headers: corsHeaders(req) });
     }
 
+    // ── Rule 2: per-user global limit — max 2 confirmed hangouts per 7-day window ──
+    // If any member already has ≥ 2 confirmed hangouts in the next 7 days across
+    // all their groups, pause this suggestion instead of confirming it.
+    const nowIso = new Date().toISOString();
+    const in7daysIso = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Get all group IDs that any member of this group belongs to
+    const { data: allMemberships } = await supabase
+      .from("group_members")
+      .select("group_id, user_id")
+      .in("user_id", allMemberIds);
+
+    const allGroupIds = [...new Set((allMemberships ?? []).map(
+      (m: { group_id: string }) => m.group_id,
+    ))];
+
+    // Find all confirmed hangouts in those groups starting in the next 7 days
+    const { data: upcomingConfirmed } = await supabase
+      .from("hangout_suggestions")
+      .select("id, group_id, start_time")
+      .in("group_id", allGroupIds)
+      .eq("status", "confirmed")
+      .gt("start_time", nowIso)
+      .lte("start_time", in7daysIso);
+
+    // Build a set of group IDs with confirmed hangouts
+    const confirmedGroupIds = new Set(
+      (upcomingConfirmed ?? []).map((h: { group_id: string }) => h.group_id),
+    );
+
+    // For each member, count how many of their groups have a confirmed hangout
+    // in the next 7 days (1 group = 1 hangout commitment, regardless of
+    // multiple suggestions per group)
+    const memberHangoutCount: Record<string, number> = {};
+    for (const m of allMemberships ?? [] as { group_id: string; user_id: string }[]) {
+      if (confirmedGroupIds.has(m.group_id)) {
+        memberHangoutCount[m.user_id] = (memberHangoutCount[m.user_id] ?? 0) + 1;
+      }
+    }
+
+    const overloadedMemberIds = allMemberIds.filter(
+      (id) => (memberHangoutCount[id] ?? 0) >= 2,
+    );
+
+    if (overloadedMemberIds.length > 0) {
+      // Pause the suggestion — check-expiry will unpause once schedules clear
+      await supabase
+        .from("hangout_suggestions")
+        .update({ status: "paused" })
+        .eq("id", hangoutId);
+
+      const pauseMsg =
+        "You've got a busy week! We'll lock this in once your schedule clears up 📅";
+      await createNotifications(allMemberIds, groupId, pauseMsg);
+      await sendPushToUsers(
+        allMemberIds,
+        "Busy week ahead 📅",
+        pauseMsg,
+        groupId,
+      );
+
+      return new Response(JSON.stringify({ ok: true, paused: true }), {
+        headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+    // ── End Rule 2 ──────────────────────────────────────────────────────────────
+
     await supabase
       .from("hangout_suggestions")
       .update({ status: "confirmed" })

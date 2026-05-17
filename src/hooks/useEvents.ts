@@ -25,6 +25,7 @@ export function useEvents() {
   return useQuery({
     queryKey: eventKeys.all(user?.id ?? ""),
     queryFn: async () => {
+      const now = new Date().toISOString();
       const { data, error } = await supabase
         .from("hangout_suggestions")
         .select(`
@@ -35,6 +36,7 @@ export function useEvents() {
             users ( id, display_name )
           )
         `)
+        .gt("start_time", now)
         .order("start_time", { ascending: true });
 
       if (error) throw error;
@@ -52,6 +54,7 @@ export function useGroupEvents(groupId: string | undefined) {
   return useQuery({
     queryKey: eventKeys.group(groupId ?? ""),
     queryFn: async () => {
+      const now = new Date().toISOString();
       const { data, error } = await supabase
         .from("hangout_suggestions")
         .select(`
@@ -62,6 +65,7 @@ export function useGroupEvents(groupId: string | undefined) {
           )
         `)
         .eq("group_id", groupId!)
+        .gt("start_time", now)
         .order("start_time", { ascending: true });
 
       if (error) throw error;
@@ -129,8 +133,15 @@ export function useUpdateRsvp() {
 }
 
 /**
- * Inserts a new hangout suggestion (status: pending) for a group.
- * rsvp_expires_at is automatically set to 24h before the event start time.
+ * Creates a new hangout suggestion via the create-suggestion Edge Function.
+ *
+ * The Edge Function enforces rate-limiting before inserting:
+ *   - 7-day cooldown since last confirmed hangout for this group
+ *   - 48-hour retry cooldown after a cancelled/expired suggestion
+ *   - Guard against duplicate pending/paused suggestions
+ *
+ * Returns the new suggestion on success, or null when rate-limited (ok: false).
+ * A null return is a silent no-op — the caller should not treat it as an error.
  */
 export function useCreateHangoutSuggestion() {
   const queryClient = useQueryClient();
@@ -142,22 +153,21 @@ export function useCreateHangoutSuggestion() {
       start_time: string;
       end_time: string;
     }) => {
-      // Expire RSVPs 24 hours before the event
-      const expiresAt = new Date(
-        new Date(suggestion.start_time).getTime() - 24 * 60 * 60 * 1000,
-      ).toISOString();
+      const { data, error } = await supabase.functions.invoke("create-suggestion", {
+        body: {
+          groupId: suggestion.group_id,
+          suggestedActivity: suggestion.suggested_activity,
+          startTime: suggestion.start_time,
+          endTime: suggestion.end_time,
+        },
+      });
 
-      const { data, error } = await supabase
-        .from("hangout_suggestions")
-        .insert({
-          ...suggestion,
-          status: "pending",
-          rsvp_expires_at: expiresAt,
-        })
-        .select()
-        .single();
       if (error) throw error;
-      return data as DbHangoutSuggestion;
+
+      // ok: false means rate-limited — treat as silent no-op, not an error
+      if (!data?.ok) return null;
+
+      return data.suggestion as DbHangoutSuggestion;
     },
     onSuccess: (_data, { group_id }) => {
       queryClient.invalidateQueries({ queryKey: ["events", "group", group_id] });
@@ -178,7 +188,7 @@ export function useUpdateHangoutStatus() {
     }: {
       hangoutId: string;
       groupId: string;
-      status: "pending" | "confirmed" | "cancelled";
+      status: "pending" | "confirmed" | "cancelled" | "expired" | "paused" | "completed";
     }) => {
       const { error } = await supabase
         .from("hangout_suggestions")

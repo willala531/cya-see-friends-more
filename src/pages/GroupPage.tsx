@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Link2, Clock, AlertTriangle, CalendarCheck, UserPlus, ToggleLeft, ToggleRight } from "lucide-react";
+import { ArrowLeft, Link2, Clock, AlertTriangle, UserPlus, ToggleLeft, ToggleRight } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cyaTransition } from "@/lib/motion";
@@ -19,11 +19,9 @@ import { useRsvpDecision } from "@/hooks/useRsvpDecision";
 import {
   blocksToUserBusy,
   getNearestSlot,
-  formatNearestSlot,
   DEFAULT_HANGOUT_DURATION,
 } from "@/lib/groupAvailability";
 import { suggestActivity } from "@/utils/suggestionEngine";
-import { CATEGORY_EMOJI } from "@/data/activities";
 import GroupInterests from "@/components/GroupInterests";
 import RsvpModal from "@/components/RsvpModal";
 import VoteModal from "@/components/VoteModal";
@@ -189,9 +187,10 @@ const GroupPage = () => {
   useEffect(() => {
     if (!suggestion || !nearestSlot || !group || eventsLoading) return;
 
-    // Guard 1: don't create while any suggestion is still pending RSVP.
+    // Guard 1: don't create while any suggestion is still pending RSVP or paused.
+    // "paused" = rate-limited by per-user weekly limit; will re-activate automatically.
     // One active proposal per group at a time.
-    const hasPending = events.some((e) => e.status === "pending");
+    const hasPending = events.some((e) => e.status === "pending" || e.status === "paused");
     if (hasPending) return;
 
     // Guard 2: don't create while a confirmed hangout is still in the future.
@@ -407,39 +406,6 @@ const GroupPage = () => {
             </motion.button>
           </div>
         </div>
-
-        {/* Next shared window + suggestion */}
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={cyaTransition}
-          className="mb-6"
-        >
-          <h2 className="font-mono-data text-muted-foreground mb-2">Next window</h2>
-          <div className="glass-surface rounded-lg p-4 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-              <CalendarCheck size={15} className="text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-foreground leading-snug">
-                {formatNearestSlot(nearestSlot)}
-              </p>
-              {nearestSlot && (
-                <p className="text-sm text-foreground mt-1">
-                  {suggestion
-                    ? `How about ${suggestion.name.toLowerCase()}? ${CATEGORY_EMOJI[suggestion.category]}`
-                    : group.group_interests.length === 0
-                      ? "Add group interests below to get a suggestion."
-                      : "No matching activities for this window."}
-                </p>
-              )}
-              <p className="font-mono-data text-[10px] text-muted-foreground mt-1.5 uppercase">
-                {syncedUserIds.size}/{group.group_members.length} members synced ·{" "}
-                {DEFAULT_HANGOUT_DURATION / 60}h window
-              </p>
-            </div>
-          </div>
-        </motion.section>
 
         {/* Events */}
         {events.map((event, i) => {
