@@ -9,7 +9,17 @@ import { PostHogErrorBoundary, PostHogProvider } from "@posthog/react";
 // diagnose missing variables in production builds without exposing values.
 checkEnvVars();
 
-posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN, {
+// Diagnostic log specifically for PostHog so the token presence is visible
+// even before PostHog itself initialises (where it would otherwise swallow
+// the error silently or throw "initialized without a token").
+console.log(
+  "[cya] posthog key:",
+  import.meta.env.VITE_PUBLIC_POSTHOG_KEY
+    ? "✓ present"
+    : "✗ MISSING — PostHog will not initialise",
+);
+
+posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_KEY, {
   api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
   defaults: "2026-01-30",
 });

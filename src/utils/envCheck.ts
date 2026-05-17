@@ -22,6 +22,8 @@ const EXPECTED_VARS = [
   "VITE_SUPABASE_ANON_KEY",
   "VITE_VAPID_PUBLIC_KEY",
   "VITE_GOOGLE_CLIENT_ID",
+  "VITE_PUBLIC_POSTHOG_KEY",
+  "VITE_PUBLIC_POSTHOG_HOST",
 ] as const;
 
 function status(value: string | undefined): string {
