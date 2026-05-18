@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { cyaTransition } from "@/lib/motion";
 import { useCreateGroup } from "@/hooks/useGroups";
 import { useCreateInvite } from "@/hooks/useInvites";
-import DevInviteLinks from "@/components/DevInviteLinks";
 import { usePostHog } from "@posthog/react";
 
 // ─── E.164 validation ─────────────────────────────────────────────────────────
@@ -17,18 +16,13 @@ function isE164(phone: string): boolean {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-interface InviteLink {
-  phoneNumber: string;
-  inviteUrl: string;
-}
-
 const CreateGroupPage = () => {
   const navigate = useNavigate();
   const createGroup = useCreateGroup();
   const createInvite = useCreateInvite();
   const posthog = usePostHog();
 
-  const [step, setStep] = useState<"name" | "invite" | "done">("name");
+  const [step, setStep] = useState<"name" | "invite">("name");
   const [groupName, setGroupName] = useState("");
   const [groupId, setGroupId] = useState<string | null>(null);
 
@@ -37,7 +31,6 @@ const CreateGroupPage = () => {
   const [phoneError, setPhoneError] = useState("");
   const [phoneList, setPhoneList] = useState<string[]>([]);
   const [isSending, setIsSending] = useState(false);
-  const [devLinks, setDevLinks] = useState<InviteLink[]>([]);
 
   // ── Step 1: create the group ─────────────────────────────────────────────
 
@@ -77,45 +70,44 @@ const CreateGroupPage = () => {
     setPhoneList((prev) => prev.filter((p) => p !== phone));
   };
 
-  // ── Step 2: send invites then go to group page ────────────────────────────
+  // ── Step 2: send invites then navigate to the group ───────────────────────
 
   const handleSendInvites = async () => {
     if (!groupId) return;
     if (phoneList.length === 0) {
-      // Skip straight to the group page
       navigate(`/group/${groupId}`);
       return;
     }
 
     setIsSending(true);
-    const links: InviteLink[] = [];
+    let sentCount = 0;
 
     for (const phoneNumber of phoneList) {
       try {
         const result = await createInvite.mutateAsync({ groupId, phoneNumber });
-        links.push({ phoneNumber, inviteUrl: result.inviteUrl });
+        sentCount++;
+        // Surface trial-mode warning if Twilio couldn't deliver
+        if (result.type === "new_user" && result.warning) {
+          toast.warning(result.warning);
+        }
       } catch {
         toast.error(`Failed to invite ${phoneNumber}`);
       }
     }
 
-    setDevLinks(links);
     setIsSending(false);
 
-    if (links.length > 0) {
-      posthog.capture("invites_sent", { invite_count: links.length, group_id: groupId });
+    if (sentCount > 0) {
+      posthog.capture("invites_sent", { invite_count: sentCount, group_id: groupId });
       toast.success(
-        `Invite${links.length > 1 ? "s" : ""} created for ${links.length} number${links.length > 1 ? "s" : ""}!`,
+        `Invite${sentCount > 1 ? "s" : ""} sent for ${sentCount} number${sentCount > 1 ? "s" : ""}!`,
       );
-      setStep("done");
     }
+
+    navigate(`/group/${groupId}`);
   };
 
   const handleSkip = () => {
-    if (groupId) navigate(`/group/${groupId}`);
-  };
-
-  const handleGoToGroup = () => {
     if (groupId) navigate(`/group/${groupId}`);
   };
 
@@ -129,7 +121,6 @@ const CreateGroupPage = () => {
           onClick={() => {
             if (step === "name") navigate("/dashboard");
             else if (step === "invite") setStep("name");
-            // "done" step has no back — user should proceed to group
           }}
           className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center hover:shadow-gloss-hover transition-shadow"
         >
@@ -138,7 +129,7 @@ const CreateGroupPage = () => {
         <div className="flex-1">
           <h1 className="text-lg text-heading">New Group</h1>
           <p className="font-mono-data text-muted-foreground text-[11px]">
-            {step === "name" ? "step 1 of 2" : step === "invite" ? "step 2 of 2" : "all done!"}
+            {step === "name" ? "step 1 of 2" : "step 2 of 2"}
           </p>
         </div>
       </div>
@@ -297,39 +288,6 @@ const CreateGroupPage = () => {
             >
               skip — I'll invite people later
             </button>
-          </motion.div>
-        )}
-
-        {/* ── Step 3: Done — show dev invite links ─────────────────────── */}
-        {step === "done" && (
-          <motion.div
-            key="done"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={cyaTransition}
-          >
-            <div className="glass-surface rounded-lg p-5 mb-4 text-center">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                <Users size={22} className="text-primary" />
-              </div>
-              <h2 className="text-base font-medium text-foreground mb-1">
-                {groupName} is ready!
-              </h2>
-              <p className="text-body text-xs">
-                {devLinks.length} invite{devLinks.length > 1 ? "s" : ""} created. Share the links below with your friends for testing.
-              </p>
-            </div>
-
-            {/* Dev invite links panel */}
-            <DevInviteLinks links={devLinks} />
-
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={handleGoToGroup}
-              className="w-full mt-5 py-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-gloss"
-            >
-              Go to group →
-            </motion.button>
           </motion.div>
         )}
       </AnimatePresence>

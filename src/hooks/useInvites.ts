@@ -5,17 +5,22 @@ import type { DbGroupInvite } from "@/types/database";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Base URL for invite links — swapped for production domain in Phase B. */
+/** Base URL for invite links. */
 export function buildInviteUrl(token: string): string {
   return `${window.location.origin}/invite/${token}`;
 }
 
+// ─── Response types ───────────────────────────────────────────────────────────
+
+export type CreateInviteResult =
+  | { type: "existing_user"; message: string }
+  | { type: "new_user"; token: string; inviteUrl: string; inviteId: string; warning?: string };
+
 // ─── Read ─────────────────────────────────────────────────────────────────────
 
 /**
- * All pending (and recent) invites for a group, with the sender's display_name.
+ * All pending invites for a group, with the sender's display_name.
  * Only shown to group members (enforced by RLS).
- * Filters out expired and declined rows so the UI stays clean.
  */
 export function useGroupInvites(groupId: string | undefined) {
   const { user } = useAuth();
@@ -41,14 +46,43 @@ export function useGroupInvites(groupId: string | undefined) {
   });
 }
 
+/**
+ * Checks whether the current user has a pending in-app invite for a specific group.
+ * Returns the invite row (with inviter name + group name) or null.
+ * Used by GroupPage to surface the InviteAcceptModal to existing users.
+ */
+export function useMyPendingGroupInvite(groupId: string | undefined) {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ["my-invite", groupId, user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("group_invites")
+        .select(`
+          *,
+          inviter:users!group_invites_invited_by_fkey ( id, display_name ),
+          groups ( id, name )
+        `)
+        .eq("group_id", groupId!)
+        .eq("invited_user_id", user!.id)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as DbGroupInvite | null;
+    },
+    enabled: !!user && !!groupId,
+    staleTime: 30_000,
+  });
+}
+
 // ─── Write ────────────────────────────────────────────────────────────────────
 
 /**
- * Sends an invite (or re-sends if a pending invite already exists for this
- * phone number in this group) by invoking the create-invite Edge Function.
- * Returns { token, inviteUrl } on success.
- *
- * Phase B: the Edge Function will also send an SMS via Twilio.
+ * Sends an invite (or re-sends) by invoking the create-invite Edge Function.
+ * Returns a typed result indicating whether the invitee is an existing user
+ * (in-app notification) or a new user (SMS sent).
  */
 export function useCreateInvite() {
   const { user } = useAuth();
@@ -70,7 +104,7 @@ export function useCreateInvite() {
         },
       });
       if (error) throw error;
-      return data as { token: string; inviteUrl: string; inviteId: string };
+      return data as CreateInviteResult;
     },
     onSuccess: (_data, { groupId }) => {
       queryClient.invalidateQueries({ queryKey: ["invites", groupId] });
@@ -79,9 +113,8 @@ export function useCreateInvite() {
 }
 
 /**
- * Accepts or declines an invite by token.
- * Invokes the process-invite Edge Function which uses service_role to
- * insert the group_member row and update the invite status.
+ * Accepts or declines a token-based invite (for new users coming via the /invite/:token URL).
+ * Invokes the process-invite Edge Function.
  */
 export function useProcessInvite() {
   const queryClient = useQueryClient();
@@ -113,6 +146,40 @@ export function useProcessInvite() {
 }
 
 /**
+ * Accepts or declines an in-app invite for an existing cya user.
+ * Uses the invite row's id (not token) — the Edge Function verifies invited_user_id matches.
+ */
+export function useRespondToDirectInvite() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      inviteId,
+      groupId,
+      type,
+    }: {
+      inviteId: string;
+      groupId: string;
+      type: "accept-direct" | "decline";
+    }) => {
+      const { data, error } = await supabase.functions.invoke("process-invite", {
+        body: { inviteId, userId: user!.id, type },
+      });
+      if (error) throw error;
+      return data as { ok: boolean; groupId?: string; groupName?: string };
+    },
+    onSuccess: (_data, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: ["group", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      queryClient.invalidateQueries({ queryKey: ["invites", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["my-invite", groupId, user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["notifications", user?.id] });
+    },
+  });
+}
+
+/**
  * Saves the user's phone number and marks onboarding complete.
  * Called from OnboardingPage on save or skip.
  */
@@ -139,7 +206,6 @@ export function useCompleteOnboarding() {
       }
     },
     onSuccess: () => {
-      // Invalidate profile so PostAuthHandler re-reads has_completed_onboarding
       queryClient.invalidateQueries({ queryKey: ["profile", user?.id] });
     },
   });

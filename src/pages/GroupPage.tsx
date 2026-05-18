@@ -21,12 +21,14 @@ import {
   getNearestSlot,
   DEFAULT_HANGOUT_DURATION,
 } from "@/lib/groupAvailability";
+import { useMyPendingGroupInvite } from "@/hooks/useInvites";
 import { suggestActivity } from "@/utils/suggestionEngine";
 import GroupInterests from "@/components/GroupInterests";
 import RsvpModal from "@/components/RsvpModal";
 import VoteModal from "@/components/VoteModal";
 import ConfettiOverlay from "@/components/ConfettiOverlay";
 import InviteModal from "@/components/InviteModal";
+import InviteAcceptModal from "@/components/InviteAcceptModal";
 import { usePostHog } from "@posthog/react";
 
 // ─── Pending event the current user hasn't answered yet ───────────────────────
@@ -109,8 +111,12 @@ const GroupPage = () => {
   const updateCanInvite = useUpdateCanInvite();
   const castVote = useCastVote();
 
-  // Invite modal
+  // Invite modal (for group admins/members sending invites)
   const [showInviteModal, setShowInviteModal] = useState(false);
+
+  // In-app invite acceptance (shown when an existing cya user was invited to this group)
+  const { data: pendingInvite } = useMyPendingGroupInvite(groupId);
+  const [inviteAcceptDismissed, setInviteAcceptDismissed] = useState(false);
 
   // Optimistic RSVP state
   const [rsvpStates, setRsvpStates] = useState<
@@ -336,12 +342,22 @@ const GroupPage = () => {
         <ConfettiOverlay onDone={() => setShowConfetti(false)} />
       )}
 
-      {/* Invite modal */}
+      {/* Invite modal (sending invites) */}
       <AnimatePresence>
         {showInviteModal && (
           <InviteModal
             groupId={group.id}
             onDismiss={() => setShowInviteModal(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* In-app invite acceptance — shown when an existing cya user was invited */}
+      <AnimatePresence>
+        {pendingInvite && !inviteAcceptDismissed && (
+          <InviteAcceptModal
+            invite={pendingInvite}
+            onDismiss={() => setInviteAcceptDismissed(true)}
           />
         )}
       </AnimatePresence>

@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Plus, RefreshCw, Send, Clock } from "lucide-react";
+import { X, Send, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow, differenceInHours } from "date-fns";
 import { cyaTransition } from "@/lib/motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGroupInvites, useCreateInvite } from "@/hooks/useInvites";
-import DevInviteLinks from "@/components/DevInviteLinks";
 import type { DbGroupInvite } from "@/types/database";
 
 // ─── E.164 validation ─────────────────────────────────────────────────────────
@@ -51,8 +50,7 @@ function InviteRow({ invite, currentUserId, onResend, isResending }: InviteRowPr
           disabled={isResending}
           className="ml-3 flex items-center gap-1 px-2.5 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono-data disabled:opacity-50"
         >
-          <RefreshCw size={10} className={isResending ? "animate-spin" : ""} />
-          Resend
+          {isResending ? "…" : "Resend"}
         </motion.button>
       )}
     </motion.div>
@@ -66,18 +64,12 @@ interface InviteModalProps {
   onDismiss: () => void;
 }
 
-interface InviteLink {
-  phoneNumber: string;
-  inviteUrl: string;
-}
-
 export default function InviteModal({ groupId, onDismiss }: InviteModalProps) {
   const { user } = useAuth();
   const { data: invites = [] } = useGroupInvites(groupId);
   const createInvite = useCreateInvite();
 
   const [phone, setPhone] = useState("");
-  const [devLinks, setDevLinks] = useState<InviteLink[]>([]);
   const [resendingId, setResendingId] = useState<string | null>(null);
 
   const handleSend = async () => {
@@ -89,13 +81,19 @@ export default function InviteModal({ groupId, onDismiss }: InviteModalProps) {
 
     try {
       const result = await createInvite.mutateAsync({ groupId, phoneNumber: trimmed });
-      setDevLinks((prev) => {
-        // Replace if already in the list (from a previous send this session)
-        const filtered = prev.filter((l) => l.phoneNumber !== trimmed);
-        return [{ phoneNumber: trimmed, inviteUrl: result.inviteUrl }, ...filtered];
-      });
       setPhone("");
-      toast.success("Invite created!");
+
+      if (result.type === "existing_user") {
+        toast.success(result.message);
+      } else {
+        if (result.warning) {
+          toast.success("Invite created!", {
+            description: result.warning,
+          });
+        } else {
+          toast.success("SMS sent!");
+        }
+      }
     } catch {
       toast.error("Failed to send invite");
     }
@@ -108,11 +106,12 @@ export default function InviteModal({ groupId, onDismiss }: InviteModalProps) {
         groupId,
         phoneNumber: invite.phone_number,
       });
-      setDevLinks((prev) => {
-        const filtered = prev.filter((l) => l.phoneNumber !== invite.phone_number);
-        return [{ phoneNumber: invite.phone_number, inviteUrl: result.inviteUrl }, ...filtered];
-      });
-      toast.success("Invite resent!");
+
+      if (result.type === "existing_user") {
+        toast.success(result.message);
+      } else {
+        toast.success(result.warning ? "Invite created!" : "SMS resent!");
+      }
     } catch {
       toast.error("Failed to resend");
     } finally {
@@ -176,9 +175,6 @@ export default function InviteModal({ groupId, onDismiss }: InviteModalProps) {
           <p className="font-mono-data text-[10px] text-muted-foreground mb-4 uppercase">
             E.164 format · e.g. +13105551234
           </p>
-
-          {/* Dev invite links */}
-          <DevInviteLinks links={devLinks} />
 
           {/* Pending invite list */}
           {invites.length > 0 && (

@@ -1,15 +1,18 @@
 // process-invite — Supabase Edge Function
 //
-// Handles three invite actions:
-//   "accept"      — validates token, adds user to group_members, marks invite accepted
-//   "decline"     — marks invite declined (no group join)
-//   "phone-match" — after onboarding: finds all pending invites for a phone number
-//                   and auto-accepts them (adds user to each group)
+// Handles four invite actions:
+//   "accept"        — validates token, adds user to group_members, marks invite accepted
+//   "decline"       — marks invite declined (no group join)
+//   "phone-match"   — after onboarding: finds all pending invites for a phone number
+//                     and auto-accepts them (adds user to each group)
+//   "accept-direct" — in-app accept for existing users: validates by inviteId + userId
+//                     (no token required), adds user to group_members
 //
 // Uses service_role to bypass RLS for all writes.
 //
 // Request body:
-//   { token?: string, phoneNumber?: string, userId: string, type: "accept" | "decline" | "phone-match" }
+//   { token?: string, inviteId?: string, phoneNumber?: string, userId: string,
+//     type: "accept" | "decline" | "phone-match" | "accept-direct" }
 //
 // Response:
 //   { ok: boolean, groupId?: string, groupName?: string }
@@ -64,9 +67,10 @@ Deno.serve(async (req) => {
 
   let body: {
     token?: string;
+    inviteId?: string;
     phoneNumber?: string;
     userId?: string;
-    type?: "accept" | "decline" | "phone-match";
+    type?: "accept" | "decline" | "phone-match" | "accept-direct";
   };
   try {
     body = await req.json();
@@ -77,7 +81,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { token, phoneNumber, userId, type } = body;
+  const { token, inviteId, phoneNumber, userId, type } = body;
 
   if (!userId || !type) {
     return new Response(
@@ -181,6 +185,63 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ ok: true, joined: (pendingInvites ?? []).length }),
+      { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+    );
+  }
+
+  // ── accept-direct: in-app accept for existing cya users ───────────────────
+  // Validates by inviteId + userId (no token required). The invited_user_id on
+  // the row must match the caller to prevent accepting someone else's invite.
+
+  if (type === "accept-direct") {
+    if (!inviteId) {
+      return new Response(
+        JSON.stringify({ ok: false, error: "inviteId is required for accept-direct" }),
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+      );
+    }
+
+    const { data: invite, error } = await supabase
+      .from("group_invites")
+      .select(`
+        id,
+        group_id,
+        status,
+        expires_at,
+        invited_user_id,
+        groups ( id, name )
+      `)
+      .eq("id", inviteId)
+      .maybeSingle();
+
+    if (error || !invite) {
+      return new Response(
+        JSON.stringify({ ok: false, error: "Invite not found" }),
+        { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+      );
+    }
+
+    // Security check: only the intended user can accept
+    if (invite.invited_user_id !== userId) {
+      return new Response(
+        JSON.stringify({ ok: false, error: "Not authorized to accept this invite" }),
+        { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+      );
+    }
+
+    const isExpired = new Date(invite.expires_at) < new Date();
+    if (invite.status !== "pending" || isExpired) {
+      return new Response(
+        JSON.stringify({ ok: false, error: "Invite has expired or already been used" }),
+        { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+      );
+    }
+
+    const group = Array.isArray(invite.groups) ? invite.groups[0] : invite.groups;
+    await acceptInvite(invite.id, invite.group_id, userId);
+
+    return new Response(
+      JSON.stringify({ ok: true, groupId: invite.group_id, groupName: group?.name ?? "" }),
       { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
     );
   }

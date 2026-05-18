@@ -42,10 +42,13 @@ export interface DbGroupInvite {
   phone_number: string;              // E.164
   status: "pending" | "accepted" | "declined" | "expired";
   token: string;                     // crypto UUID — acts as a secret URL slug
+  invited_user_id: string | null;    // set for existing cya users (in-app invite path)
   created_at: string;
   expires_at: string;
-  // Populated by join:
-  users?: Pick<DbUser, "id" | "display_name">;
+  // Populated by joins:
+  users?: Pick<DbUser, "id" | "display_name">;       // inviter (via invited_by FK)
+  inviter?: Pick<DbUser, "id" | "display_name">;     // alias used by useMyPendingGroupInvite
+  groups?: Pick<DbGroup, "id" | "name">;
 }
 
 export interface DbAvailabilityBlock {
