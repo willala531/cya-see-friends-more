@@ -35,20 +35,6 @@ export const CATEGORY_ORDER = [
   "Shopping",
 ] as const;
 
-export const CATEGORY_EMOJI: Record<string, string> = {
-  Food: "🍽️",
-  Games: "🎮",
-  Arts: "🎨",
-  Sports: "⚽",
-  Fitness: "💪",
-  Adventure: "🏔️",
-  Relaxation: "🧘",
-  Nature: "🌿",
-  "Movies/TV": "🎬",
-  Nightlife: "🍸",
-  Shopping: "🛍️",
-};
-
 // ─── Activity library ─────────────────────────────────────────────────────────
 
 export const activities: Activity[] = [

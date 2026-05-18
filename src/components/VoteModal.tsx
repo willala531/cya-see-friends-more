@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { differenceInSeconds, format } from "date-fns";
 import { cyaTransition } from "@/lib/motion";
-import { activityById, CATEGORY_EMOJI } from "@/data/activities";
+import { activityById } from "@/data/activities";
 import type { DbHangoutSuggestion, DbHangoutVote } from "@/types/database";
 
 // ─── Countdown timer ──────────────────────────────────────────────────────────
@@ -105,10 +105,10 @@ const VoteModal = ({
           <div className="flex items-start justify-between mb-1">
             <div>
               <p className="font-mono-data text-[10px] text-muted-foreground">
-                ACTIVITY VOTE 🗳️
+                ACTIVITY VOTE
               </p>
               <h2 className="text-base font-medium text-foreground leading-snug">
-                Someone doesn't vibe — let's take a vote!
+                Someone wants a new activity — let's vote!
               </h2>
             </div>
             <button
@@ -156,9 +156,6 @@ const VoteModal = ({
                   )}
                   <div className="relative flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg">
-                        {CATEGORY_EMOJI[act.category]}
-                      </span>
                       <div>
                         <p className="text-sm font-medium text-foreground">
                           {act.name}

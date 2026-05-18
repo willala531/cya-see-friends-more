@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { format, isToday, isTomorrow, differenceInCalendarDays } from "date-fns";
 import { cyaTransition } from "@/lib/motion";
-import { CATEGORY_EMOJI, activityByName } from "@/data/activities";
+import { activityByName } from "@/data/activities";
 import type { DbHangoutSuggestion } from "@/types/database";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -50,7 +50,8 @@ const RsvpModal = ({
   const activity = event.suggested_activity
     ? activityByName[event.suggested_activity] ?? null
     : null;
-  const emoji = activity ? CATEGORY_EMOJI[activity.category] : "🗓️";
+  // activity is kept for potential future use (category, duration info)
+  void activity;
 
   const hasResponded = currentResponse !== "pending";
 
@@ -88,16 +89,13 @@ const RsvpModal = ({
           <div className="overflow-y-auto flex-1 p-5 pb-3">
             {/* Header */}
             <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">{emoji}</span>
-                <div>
-                  <p className="font-mono-data text-[10px] text-muted-foreground">
-                    HANGOUT PROPOSAL
-                  </p>
-                  <h2 className="text-lg text-heading leading-tight">
-                    {event.suggested_activity}
-                  </h2>
-                </div>
+              <div>
+                <p className="font-mono-data text-[10px] text-muted-foreground">
+                  HANGOUT PROPOSAL
+                </p>
+                <h2 className="text-lg text-heading leading-tight">
+                  {event.suggested_activity}
+                </h2>
               </div>
               <button
                 onClick={onDismiss}
@@ -119,7 +117,7 @@ const RsvpModal = ({
                 </p>
                 {userIsSynced && (
                   <p className="text-xs text-accent mt-1">
-                    You're free — we checked ✓
+                    You're free — we checked
                   </p>
                 )}
               </div>
@@ -131,10 +129,10 @@ const RsvpModal = ({
                 <p className="text-sm text-muted-foreground">Your response:</p>
                 <p className="text-base font-medium text-foreground mt-0.5">
                   {currentResponse === "yes"
-                    ? "🙌 You're in!"
+                    ? "You're in!"
                     : currentResponse === "no"
                       ? "Can't make it"
-                      : "😐 Not vibing"}
+                      : "Pick a new activity"}
                 </p>
                 <p className="font-mono-data text-[10px] text-muted-foreground mt-1">
                   TAP BELOW TO CHANGE YOUR RESPONSE
@@ -157,7 +155,7 @@ const RsvpModal = ({
                   onClick={() => onRespond("yes")}
                   className="w-full py-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-gloss"
                 >
-                  🙌 I'm in
+                  I'm in
                 </motion.button>
                 <div className="flex gap-2">
                   <motion.button
@@ -172,7 +170,7 @@ const RsvpModal = ({
                     onClick={() => onRespond("maybe")}
                     className="flex-1 py-2.5 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium"
                   >
-                    😐 Not vibing
+                    Pick a new activity
                   </motion.button>
                 </div>
               </div>
@@ -189,7 +187,7 @@ const RsvpModal = ({
                         : "bg-secondary text-secondary-foreground"
                     }`}
                   >
-                    {r === "yes" ? "🙌 In" : r === "no" ? "Can't" : "😐 Meh"}
+                    {r === "yes" ? "In" : r === "no" ? "Can't" : "New activity"}
                   </motion.button>
                 ))}
               </div>

@@ -4,10 +4,24 @@ import { Check, ChevronDown } from "lucide-react";
 import { cyaTransition } from "@/lib/motion";
 import {
   CATEGORY_ORDER,
-  CATEGORY_EMOJI,
   activitiesByCategory,
   type Activity,
 } from "@/data/activities";
+
+// Logo-derived pastel palette — one color per category in order
+const CATEGORY_COLORS: Record<string, string> = {
+  Food:        "#ff9c9b",
+  Games:       "#f3b0ec",
+  Arts:        "#bfb4fd",
+  Sports:      "#69a0c3",
+  Fitness:     "#ffd89f",
+  Adventure:   "#e2cf76",
+  Relaxation:  "#ff9c9b",
+  Nature:      "#f3b0ec",
+  "Movies/TV": "#bfb4fd",
+  Nightlife:   "#69a0c3",
+  Shopping:    "#ffd89f",
+};
 import { useUpdateGroupInterests } from "@/hooks/useGroups";
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -53,6 +67,7 @@ const GroupInterests = ({ groupId, interests }: GroupInterestsProps) => {
           <div
             key={category}
             className="glass-surface rounded-lg overflow-hidden"
+            style={{ borderLeft: `3px solid ${CATEGORY_COLORS[category] ?? "#bfb4fd"}` }}
           >
             {/* Category header row */}
             <button
@@ -60,9 +75,6 @@ const GroupInterests = ({ groupId, interests }: GroupInterestsProps) => {
               className="w-full px-3 py-2.5 flex items-center justify-between"
             >
               <div className="flex items-center gap-2">
-                <span className="text-base leading-none">
-                  {CATEGORY_EMOJI[category]}
-                </span>
                 <span className="text-sm font-medium text-foreground">
                   {category}
                 </span>

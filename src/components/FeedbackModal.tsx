@@ -186,7 +186,6 @@ export default function FeedbackModal({ onDismiss }: FeedbackModalProps) {
                 transition={cyaTransition}
                 className="py-6 text-center"
               >
-                <p className="text-2xl mb-3">🙏</p>
                 <p className="text-sm font-medium text-foreground">
                   Thanks for your feedback!
                 </p>
@@ -215,7 +214,7 @@ export default function FeedbackModal({ onDismiss }: FeedbackModalProps) {
                             : "bg-secondary text-secondary-foreground"
                         }`}
                       >
-                        {t === "bug" ? "🐛 Bug / Error" : "💡 Suggestion"}
+                        {t === "bug" ? "Bug / Error" : "Suggestion"}
                       </motion.button>
                     ))}
                   </div>

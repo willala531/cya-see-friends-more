@@ -81,7 +81,7 @@ const InvitePage = () => {
       if (result.ok && result.groupId) {
         posthog.capture("invite_joined", { group_id: result.groupId, group_name: result.groupName });
         setActionState("joined");
-        toast.success(`Welcome to ${result.groupName ?? "the group"}! 🎉`);
+        toast.success(`Welcome to ${result.groupName ?? "the group"}!`);
         setTimeout(() => {
           navigate(
             `/group/${result.groupId}?welcome=${encodeURIComponent(result.groupName ?? "")}`,
@@ -199,7 +199,7 @@ const InvitePage = () => {
 
           <h1 className="text-lg font-semibold text-foreground mb-1">
             {actionState === "joined"
-              ? `You joined ${invite?.groupName}! 🎉`
+              ? `You joined ${invite?.groupName}!`
               : `Join ${invite?.groupName}`}
           </h1>
 

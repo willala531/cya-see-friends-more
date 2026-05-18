@@ -6,6 +6,26 @@ import { cyaTransition } from "@/lib/motion";
 import { useGroups } from "@/hooks/useGroups";
 import { useEvents } from "@/hooks/useEvents";
 
+// Logo-derived pastel palette for group card accents
+const PALETTE = [
+  "#ff9c9b", // coral pink
+  "#f3b0ec", // pink/purple
+  "#bfb4fd", // lavender
+  "#69a0c3", // teal blue
+  "#ffd89f", // peach orange
+  "#e2cf76", // yellow green
+];
+
+/**
+ * Derives a consistent palette color from a group ID string.
+ * Same group always gets the same color regardless of list order.
+ */
+function groupColor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return PALETTE[hash % PALETTE.length];
+}
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [starredGroups, setStarredGroups] = useState<Set<string>>(
@@ -154,6 +174,7 @@ const Dashboard = () => {
                   transition={{ ...cyaTransition, delay: i * 0.05 }}
                   onClick={() => navigate(`/group/${group.id}`)}
                   className="glass-surface rounded-lg p-3.5 flex items-center justify-between cursor-pointer hover:shadow-gloss-hover transition-shadow duration-150"
+                  style={{ borderLeft: `4px solid ${groupColor(group.id)}` }}
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-md bg-secondary flex items-center justify-center">

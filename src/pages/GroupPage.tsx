@@ -142,7 +142,7 @@ const GroupPage = () => {
     const welcomeGroup = searchParams.get("welcome");
     if (welcomeGroup && !welcomeShownRef.current) {
       welcomeShownRef.current = true;
-      toast.success(`Welcome to ${welcomeGroup}! 🎉`);
+      toast.success(`Welcome to ${welcomeGroup}!`);
     }
   }, [searchParams]);
 
@@ -303,7 +303,7 @@ const GroupPage = () => {
       { hangoutId, groupId: group.id, response },
       {
         onSuccess: () => {
-          if (response === "yes") toast.success("You're in! 🙌");
+          if (response === "yes") toast.success("You're in!");
           else if (response === "no") toast.success("Maybe next time");
           else toast("Got it — we'll check for alternatives");
           setShowRsvpModal(false);
@@ -470,7 +470,7 @@ const GroupPage = () => {
                       onClick={() => setShowVoteModal(true)}
                       className="font-mono-data text-[10px] text-primary px-2 py-0.5 rounded-sm bg-primary/10"
                     >
-                      🗳️ vote
+                      vote
                     </motion.button>
                   )}
                 </div>
@@ -490,9 +490,9 @@ const GroupPage = () => {
                   <div className="flex gap-2 mb-4">
                     {(["yes", "no", "maybe"] as const).map((r) => {
                       const labels = {
-                        yes: "🙌 I'm in",
+                        yes: "I'm in",
                         no: "Can't make it",
-                        maybe: "😐 Not vibing",
+                        maybe: "Pick a new activity",
                       };
                       const activeClass =
                         r === "yes"
@@ -542,7 +542,7 @@ const GroupPage = () => {
                           ) : status === "no" ? (
                             <span className="text-destructive">✗ NO</span>
                           ) : status === "maybe" ? (
-                            <span className="text-muted-foreground">😐 MAYBE</span>
+                            <span className="text-muted-foreground">MAYBE</span>
                           ) : (
                             <span className="text-muted-foreground flex items-center gap-1">
                               <Clock size={10} /> PENDING
